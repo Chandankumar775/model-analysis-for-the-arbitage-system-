@@ -1,0 +1,1305 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bellman-Ford Arbitrage System, interactive model</title>
+<meta name="description" content="Step-by-step 3D walkthrough of a Spring Boot + Java Swing triangular arbitrage detector built on Bellman-Ford.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#070A0F; --surface:rgba(12,17,24,.78); --surface-solid:#0C1118;
+  --ink:#E9EEF4; --ink-2:#9AA8B8; --line:rgba(160,190,220,.14); --code-bg:rgba(120,170,220,.07);
+  --accent:#2FD3C1; --accent-ink:#04110F; --signal:#FF4D63; --brass:#F2A541; --violet:#A07CFF; --ice:#7FB6FF;
+  --scene-bg:#070A0F; --scene-table:#0B1017; --scene-model:#1A232E; --scene-focus:#3A4F63;
+  --scene-edge:#5A6B7C; --scene-grid:#132433; --scene-screen:#0A1016; --scene-tube:#3E4D5C;
+  --shadow:0 30px 60px -28px rgba(0,0,0,.9), 0 0 0 1px rgba(120,170,220,.04);
+  --sans:'Familjen Grotesk','Helvetica Neue',Helvetica,Arial,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color-scheme:dark;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+::selection{background:color-mix(in srgb,var(--accent) 35%,transparent);color:var(--ink)}
+*{scrollbar-width:thin;scrollbar-color:rgba(160,190,220,.25) transparent}
+[hidden]{display:none!important}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{height:100%;margin:0;overflow:hidden;background:radial-gradient(120% 80% at 50% 0%,#0F1824 0%,var(--bg) 60%);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+#stage{position:fixed;inset:0;touch-action:none}
+#stage canvas{display:block;width:100%;height:100%;cursor:grab}
+#stage canvas.dragging{cursor:grabbing}
+#stage canvas.pointing{cursor:pointer}
+#labels{position:fixed;inset:0;pointer-events:none;overflow:hidden}
+
+.lbl{position:absolute;left:0;top:0;white-space:nowrap;will-change:transform;
+  font:500 11.5px/1 var(--mono);color:var(--ink);background:rgba(8,12,18,.72);
+  border:1px solid var(--line);border-radius:6px;padding:5px 8px;transition:border-color .25s,color .25s,opacity .25s,box-shadow .25s;
+  -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.lbl.focus{border-color:var(--accent);color:#fff;background:color-mix(in srgb,var(--accent) 22%,rgba(8,12,18,.8));box-shadow:0 6px 18px -6px color-mix(in srgb,var(--accent) 70%,transparent)}
+.lbl.hover{border-color:var(--ink-2)}
+.lbl.layer{font:600 14px/1 var(--sans);background:none;border:none;padding:0;color:var(--ink-2);letter-spacing:.01em;-webkit-backdrop-filter:none;backdrop-filter:none}
+.lbl.coin{font:600 13px/1.15 var(--sans);text-align:center;padding:5px 8px}
+.lbl.coin .d{display:block;font:500 10.5px/1.3 var(--mono);color:var(--ink-2);margin-top:2px}
+.lbl.coin .d:empty{display:none}
+.lbl.coin.hot{border-color:var(--signal);color:#fff;background:color-mix(in srgb,var(--signal) 30%,rgba(8,12,18,.8));box-shadow:0 6px 20px -6px var(--signal)}
+.lbl.coin.hot .d{color:#FFD0D6}
+.lbl.w{font:500 10.5px/1 var(--mono);padding:3px 5px;color:var(--ink-2)}
+.lbl.w.neg{color:var(--signal);border-color:color-mix(in srgb,var(--signal) 45%,transparent)}
+
+.panel{position:fixed;background:var(--surface);border:1px solid var(--line);border-radius:14px;
+  box-shadow:var(--shadow);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px)}
+
+.brand{position:fixed;left:24px;top:calc(20px + env(safe-area-inset-top,0px));max-width:360px}
+.brand strong{display:block;font-weight:700;font-size:20px;letter-spacing:-.015em}
+.brand strong em{font-style:normal;color:var(--accent)}
+.brand span{display:block;font-size:13.5px;color:var(--ink-2);margin-top:3px}
+
+.story{left:20px;bottom:calc(20px + env(safe-area-inset-bottom,0px));width:404px;max-height:calc(100% - 140px);
+  display:flex;flex-direction:column;padding:20px 22px 18px}
+.story-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.count{font-size:12.5px;color:var(--ink-2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.ticks{display:flex;gap:3px;flex-wrap:wrap;justify-content:flex-end}
+.tick{width:12px;height:12px;padding:0;border:0;background:none;cursor:pointer;position:relative;border-radius:3px}
+.tick::after{content:"";position:absolute;left:2px;right:2px;top:5px;height:3px;border-radius:2px;background:var(--line)}
+.tick.done::after{background:color-mix(in srgb,var(--accent) 45%,transparent)}
+.tick.on::after{background:var(--accent);top:4px;height:5px}
+.tick:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.story h2{font-size:25px;line-height:1.14;letter-spacing:-.015em;font-weight:650;margin:14px 0 8px;text-wrap:balance}
+.story .scroll{overflow:auto;min-height:0;margin-right:-8px;padding-right:8px}
+.story .body{font-size:15px;line-height:1.55;color:var(--ink)}
+.story .body p{margin:0 0 10px}
+.story .body b{font-weight:650;color:#fff}
+.story .body .mono{color:var(--accent)}
+code,.mono{font-family:var(--mono);font-size:.88em}
+.story pre{margin:4px 0 12px;padding:12px 14px;background:var(--code-bg);border:1px solid var(--line);border-radius:9px;overflow:auto;
+  font:12.5px/1.6 var(--mono);color:var(--ink);tab-size:4}
+.story pre .k{color:var(--accent)} .story pre .s{color:var(--brass)} .story pre .c{color:var(--ink-2)}
+.nav{display:flex;gap:8px;margin-top:12px;padding-top:14px;border-top:1px solid var(--line)}
+.nav .grow{flex:1}
+.btn{font:600 14px/1 var(--sans);border-radius:9px;padding:11px 16px;cursor:pointer;border:1px solid var(--line);
+  background:transparent;color:var(--ink);transition:background .2s,border-color .2s,transform .1s}
+.btn:hover{border-color:var(--ink-2)}
+.btn:active{transform:translateY(1px)}
+.btn:disabled{opacity:.4;cursor:default}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);min-width:112px}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.small{padding:8px 12px;font-size:13px}
+.btn[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.data{right:20px;top:calc(20px + env(safe-area-inset-top,0px));width:336px;max-height:calc(100% - 140px);overflow:auto;padding:16px 18px}
+.data h3{margin:0 0 4px;font-size:15px;font-weight:650;letter-spacing:-.005em}
+.data .sub{margin:0 0 12px;font-size:12.5px;color:var(--ink-2);line-height:1.45}
+.data table{width:100%;border-collapse:collapse;font:500 12px/1.2 var(--mono);font-variant-numeric:tabular-nums}
+.data th{font:600 12px/1.2 var(--sans);color:var(--ink-2);text-align:right;padding:6px 4px;border-bottom:1px solid var(--line)}
+.data th:first-child,.data td:first-child{text-align:left}
+.data td{text-align:right;padding:7px 4px;border-bottom:1px solid var(--line)}
+.data tr:last-child td{border-bottom:0}
+.data td.hi{color:var(--signal);font-weight:600}
+.data td.dim{color:var(--ink-2)}
+.data td.flash{background:color-mix(in srgb,var(--brass) 28%,transparent);color:#FFE2B8;border-radius:4px}
+.data tr.win td{color:var(--signal)}
+.data .eq{font:500 12.5px/1.75 var(--mono);margin:0 0 10px}
+.data .eq .r{color:var(--signal);font-weight:600}
+.data .eq .g{color:var(--accent);font-weight:600}
+.data .note{font-size:12.5px;color:var(--ink-2);line-height:1.5;margin:10px 0 0}
+.data .legend{display:grid;gap:8px;font-size:13px}
+.data .legend i{display:inline-block;width:14px;height:14px;border-radius:4px;vertical-align:-2px;margin-right:8px}
+.data .chain{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font:600 13px/1 var(--sans);margin:2px 0 12px}
+.data .chain span{padding:6px 8px;border:1px solid var(--signal);color:var(--signal);border-radius:6px}
+.data .empty{font-size:13px;color:var(--ink-2);margin:6px 0 0}
+
+.pop{right:20px;bottom:calc(20px + env(safe-area-inset-bottom,0px));width:320px;padding:16px 18px}
+.pop .name{font:600 14px/1.2 var(--mono);color:var(--lc,var(--accent));margin:0 0 3px}
+.pop .layer{font-size:12.5px;color:var(--ink-2);margin:0 0 10px}
+.pop p{margin:0 0 10px;font-size:14px;line-height:1.5}
+.pop ul{margin:0;padding:0;list-style:none;font:500 12px/1.7 var(--mono);color:var(--ink-2)}
+.pop .x{position:absolute;right:10px;top:10px;width:30px;height:30px;border-radius:8px;border:0;background:none;color:var(--ink-2);font-size:18px;cursor:pointer}
+.pop .x:hover{background:var(--code-bg)}
+.pop .x:focus-visible{outline:2px solid var(--accent)}
+.pop .rel-h{margin:12px 0 6px;font-size:12px;font-weight:600;color:var(--ink-2)}
+.pop .rel-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.chip{font:500 11.5px/1 var(--mono);color:var(--ink);background:transparent;border:1px solid color-mix(in srgb,var(--c) 45%,transparent);border-radius:6px;padding:6px 8px;cursor:pointer;transition:background .15s,border-color .15s}
+.chip:hover{background:color-mix(in srgb,var(--c) 16%,transparent);border-color:var(--c)}
+.chip:focus-visible{outline:2px solid var(--c);outline-offset:1px}
+.pop .fly{width:100%}
+.tip{position:fixed;left:0;top:0;z-index:5;pointer-events:none;background:var(--surface-solid);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:500 12px/1.55 var(--mono);color:var(--ink-2);box-shadow:0 12px 28px -14px rgba(0,0,0,.9);white-space:nowrap}
+.tip b{font:650 13px/1.4 var(--sans);color:var(--ink)}
+.tip .neg{color:var(--signal)} .tip .pos{color:var(--accent)}
+.lbl.dim{opacity:.3}
+.lbl.rel{border-color:var(--ink-2);color:#fff}
+.data [data-edge],.data [data-node],.data [data-cycle]{cursor:crosshair}
+.data tr[data-node]:hover td,.data tr[data-cycle]:hover td,.data tr[data-edge]:hover td,.data td[data-edge]:hover{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+
+.hint{position:fixed;right:22px;bottom:calc(18px + env(safe-area-inset-bottom,0px));margin:0;font-size:12.5px;color:var(--ink-2)}
+.fade{animation:fade .35s ease both}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.fallback{position:fixed;inset:0;display:grid;place-items:center;padding:24px;text-align:center;font-size:16px;color:var(--ink-2)}
+
+@media (max-width:820px){
+  .brand,.hint{display:none}
+  .story{left:10px;right:10px;width:auto;bottom:calc(10px + env(safe-area-inset-bottom,0px));max-height:50%;padding:16px 16px 14px}
+  .story h2{font-size:21px;margin-top:10px}
+  .story .body{font-size:14.5px}
+  .data{left:10px;right:10px;width:auto;top:calc(10px + env(safe-area-inset-top,0px));max-height:30%;padding:12px 14px}
+  .pop{left:10px;right:10px;width:auto;top:calc(10px + env(safe-area-inset-top,0px));bottom:auto}
+  .lbl{font-size:10.5px;padding:4px 6px}
+  .lbl.layer{font-size:12px}
+}
+@media (prefers-reduced-motion: reduce){.fade{animation:none}.btn{transition:none}}
+</style>
+</head>
+<body>
+<div id="stage" aria-label="3D model of the arbitrage system"></div>
+<div id="labels" aria-hidden="true"></div>
+
+<header class="brand">
+  <strong>Bellman-Ford <em>Arbitrage</em> System</strong>
+  <span>A 3D walkthrough of a Spring Boot + Java Swing forex arbitrage detector</span>
+</header>
+
+<aside class="panel data" id="data" hidden></aside>
+
+<section class="panel story" aria-live="polite">
+  <div class="story-top">
+    <span class="count" id="count"></span>
+    <div class="ticks" id="ticks" role="tablist" aria-label="Steps"></div>
+  </div>
+  <h2 id="title"></h2>
+  <div class="scroll"><div class="body" id="body"></div></div>
+  <div class="nav">
+    <button class="btn" id="prev" type="button">Back</button>
+    <button class="btn" id="auto" type="button" aria-pressed="false">Autoplay</button>
+    <span class="grow"></span>
+    <button class="btn primary" id="next" type="button">Next</button>
+  </div>
+</section>
+
+<div class="panel pop" id="pop" hidden role="dialog" aria-label="Class details"></div>
+<p class="hint">Drag to orbit · scroll to zoom · hover a block to trace its connections · double-click to fly in</p>
+<div class="tip" id="tip" hidden role="tooltip"></div>
+<div class="fallback" id="fallback" hidden>WebGL is not available in this browser. Try the latest Chrome, Edge or Firefox.</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script>
+(function () {
+'use strict';
+var $ = function (s) { return document.querySelector(s); };
+if (typeof THREE === 'undefined') { $('#fallback').hidden = false; $('#fallback').textContent = 'Three.js failed to load. Check your internet connection and reload the page.'; return; }
+
+var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+var CUR = ['USD', 'EUR', 'GBP', 'INR'];
+var FEE = 0.0005, SPREAD = 0.001;
+
+/* ---------- palette ---------- */
+function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function readPalette() {
+  return { bg: cssVar('--scene-bg'), table: cssVar('--scene-table'), model: cssVar('--scene-model'), focus: cssVar('--scene-focus'),
+    edge: cssVar('--scene-edge'), grid: cssVar('--scene-grid'), screen: cssVar('--scene-screen'), tube: cssVar('--scene-tube'),
+    accent: cssVar('--accent'), signal: cssVar('--signal'), brass: cssVar('--brass'), ink: cssVar('--ink'), ink2: cssVar('--ink-2'), line: cssVar('--line') };
+}
+var P = readPalette();
+function isDark() { var c = new THREE.Color(P.bg); return (c.r + c.g + c.b) / 3 < 0.35; }
+
+/* ---------- finance + algorithm ---------- */
+function tourRates() {
+  var price = [1, 1 / 0.9, 1.27, 0.012], r = [];
+  for (var i = 0; i < 4; i++) { r.push([]); for (var j = 0; j < 4; j++) r[i].push(i === j ? 1 : price[i] / price[j] * (1 - (i === 3 || j === 3 ? 0.004 : SPREAD))); }
+  r[0][1] = 0.90; r[1][2] = 0.88; r[2][0] = 1.27; r[2][1] = (1 / 0.88) * (1 - SPREAD);
+  return r;
+}
+function runBF(rates, fee) {
+  var n = rates.length, edges = [], i, j, k, r;
+  for (i = 0; i < n; i++) for (j = 0; j < n; j++) if (i !== j) edges.push({ u: i, v: j, w: -Math.log(rates[i][j] * (1 - fee)) });
+  var dist = [], parent = [];
+  for (i = 0; i < n; i++) { dist.push(0); parent.push(-1); }
+  var events = [], distAfter = [dist.slice()], parentAfter = [parent.slice()], x = -1, lastEdge = null, rounds = 0;
+  for (r = 1; r <= n; r++) {
+    x = -1; rounds = r;
+    for (k = 0; k < edges.length; k++) {
+      var e = edges[k], nd = dist[e.u] + e.w, relaxed = nd < dist[e.v] - 1e-12;
+      if (relaxed) { dist[e.v] = nd; parent[e.v] = e.u; x = e.v; if (r === n && !lastEdge) lastEdge = { u: e.u, v: e.v, k: k }; }
+      events.push({ round: r, k: k, u: e.u, v: e.v, w: e.w, relaxed: relaxed, dist: dist.slice(), parent: parent.slice() });
+    }
+    distAfter.push(dist.slice()); parentAfter.push(parent.slice());
+    if (x === -1) break;
+  }
+  var cycle = null, walk = [];
+  if (x !== -1 && rounds === n) {
+    var y = x;
+    for (k = 0; k < n && y !== -1; k++) { walk.push(y); y = parent[y]; }
+    if (y !== -1) {
+      var back = [], cur = y, guard = 0;
+      do { back.push(cur); cur = parent[cur]; guard++; } while (cur !== y && cur !== -1 && guard <= n);
+      if (cur === y) {
+        var fwd = back.reverse(), s = fwd.indexOf(0);
+        var rot = s > 0 ? fwd.slice(s).concat(fwd.slice(0, s)) : fwd;
+        cycle = rot.concat([rot[0]]);
+      }
+    }
+  }
+  return { edges: edges, events: events, distAfter: distAfter, parentAfter: parentAfter, lastEdge: lastEdge, cycle: cycle, walk: walk, n: n, rounds: rounds };
+}
+function cycleProduct(rates, cyc) { var p = 1; for (var i = 0; i < cyc.length - 1; i++) p *= rates[cyc[i]][cyc[i + 1]]; return p; }
+function cycleProfit(rates, cyc, fee) { return (cycleProduct(rates, cyc) * Math.pow(1 - fee, cyc.length - 1) - 1) * 100; }
+function triangles(rates, fee) {
+  var out = [], n = rates.length;
+  for (var a = 0; a < n; a++) for (var b = a + 1; b < n; b++) for (var c = b + 1; c < n; c++) {
+    [[a, b, c, a], [a, c, b, a]].forEach(function (cy) {
+      out.push({ cyc: cy, gross: cycleProduct(rates, cy), net: cycleProduct(rates, cy) * Math.pow(1 - fee, 3) });
+    });
+  }
+  return out.sort(function (p, q) { return q.net - p.net; });
+}
+function pathText(cyc) { return cyc.map(function (i) { return CUR[i]; }).join(' → '); }
+function fmtRate(v) { return v >= 10 ? v.toFixed(2) : v.toFixed(4); }
+function fmtD(v) { return (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(4); }
+
+var TOUR = { rates: tourRates() };
+TOUR.bf = runBF(TOUR.rates, FEE);
+TOUR.tri = triangles(TOUR.rates, FEE);
+TOUR.cycle = TOUR.bf.cycle || TOUR.tri[0].cyc;
+TOUR.profit = cycleProfit(TOUR.rates, TOUR.cycle, FEE);
+
+/* ---------- renderer ---------- */
+var stage = $('#stage'), renderer;
+try { renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' }); }
+catch (err) { $('#fallback').hidden = false; return; }
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.25;
+stage.appendChild(renderer.domElement);
+var MAX_ANISO = renderer.capabilities.getMaxAnisotropy();
+
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(P.bg);
+scene.fog = new THREE.FogExp2(P.bg, 0.0105);
+var camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.1, 400);
+
+/* layer colours: amber rates, teal detection, violet UI, ice for main */
+var LAYER_COL = { 'Rate layer': '#F2A541', 'Detection layer': '#2FD3C1', 'UI layer': '#A07CFF', 'main thread': '#7FB6FF' };
+
+/* ---------- procedural textures ---------- */
+function canvasTex(w, h, draw, rx, ry) {
+  var c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
+  var t = new THREE.CanvasTexture(c); t.anisotropy = MAX_ANISO;
+  if (rx) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry || rx); }
+  return t;
+}
+function noise(ctx, w, h, n, a, light) {
+  for (var i = 0; i < n; i++) { ctx.fillStyle = (light ? 'rgba(255,255,255,' : 'rgba(0,0,0,') + (Math.random() * a).toFixed(3) + ')'; ctx.fillRect(Math.random() * w, Math.random() * h, 1 + Math.random() * 2, 1 + Math.random() * 2); }
+}
+/* floor: polished dark stone with an etched trading-floor grid */
+var floorTex = canvasTex(1024, 1024, function (c, w, h) {
+  var g = c.createLinearGradient(0, 0, w, h); g.addColorStop(0, '#0C121A'); g.addColorStop(1, '#090D13'); c.fillStyle = g; c.fillRect(0, 0, w, h);
+  noise(c, w, h, 9000, 0.05, true); noise(c, w, h, 6000, 0.35, false);
+  for (var v = 0; v <= w; v += 64) {
+    var major = v % 256 === 0;
+    c.fillStyle = major ? 'rgba(90,170,210,.16)' : 'rgba(90,150,200,.045)';
+    c.fillRect(v - (major ? 1 : 0.5), 0, major ? 2 : 1, h); c.fillRect(0, v - (major ? 1 : 0.5), w, major ? 2 : 1);
+  }
+  c.fillStyle = 'rgba(120,200,230,.3)';
+  for (var x = 0; x <= w; x += 256) for (var y = 0; y <= h; y += 256) c.fillRect(x - 3, y - 3, 6, 6);
+}, 7);
+var floorRough = canvasTex(512, 512, function (c, w, h) {
+  c.fillStyle = '#6a6a6a'; c.fillRect(0, 0, w, h); noise(c, w, h, 14000, 0.25, true); noise(c, w, h, 14000, 0.3, false);
+  for (var i = 0; i < 40; i++) { c.strokeStyle = 'rgba(255,255,255,' + (Math.random() * 0.12).toFixed(2) + ')'; c.lineWidth = 6 + Math.random() * 30; c.beginPath(); c.moveTo(Math.random() * w, Math.random() * h); c.bezierCurveTo(Math.random() * w, Math.random() * h, Math.random() * w, Math.random() * h, Math.random() * w, Math.random() * h); c.stroke(); }
+}, 14);
+/* brushed metal for platforms */
+var brushedTex = canvasTex(512, 512, function (c, w, h) {
+  c.fillStyle = '#b8c2cc'; c.fillRect(0, 0, w, h);
+  for (var i = 0; i < 2600; i++) { var y = Math.random() * h, a = Math.random() * 0.045; c.fillStyle = Math.random() < 0.5 ? 'rgba(255,255,255,' + a + ')' : 'rgba(0,0,0,' + a + ')'; c.fillRect(0, y, w, 0.6 + Math.random() * 1.4); }
+  noise(c, w, h, 3000, 0.08, false);
+});
+/* panel seams + vents for class blocks */
+var panelTex = canvasTex(256, 512, function (c, w, h) {
+  c.fillStyle = '#c4ccd4'; c.fillRect(0, 0, w, h);
+  noise(c, w, h, 6000, 0.06, false); noise(c, w, h, 3000, 0.05, true);
+  c.fillStyle = 'rgba(0,0,0,.35)'; for (var y2 = 64; y2 < h; y2 += 128) c.fillRect(0, y2, w, 2);
+  c.fillStyle = 'rgba(255,255,255,.22)'; for (y2 = 66; y2 < h; y2 += 128) c.fillRect(0, y2, w, 1);
+  c.fillStyle = 'rgba(0,0,0,.4)'; for (var k = 0; k < 6; k++) c.fillRect(w * 0.2, 20 + k * 7, w * 0.6, 3);
+});
+/* emissive strips: light only where the block "glows" */
+var stripTex = canvasTex(256, 512, function (c, w, h) {
+  c.fillStyle = '#000'; c.fillRect(0, 0, w, h);
+  c.fillStyle = '#fff'; c.fillRect(0, 0, w, 5);
+  for (var y = 64; y < h; y += 128) { c.fillStyle = 'rgba(255,255,255,.55)'; c.fillRect(0, y - 1, w, 2); }
+  for (var k = 0; k < 6; k++) { c.fillStyle = 'rgba(255,255,255,.8)'; c.fillRect(w * 0.2, 21 + k * 7, w * 0.6, 1); }
+});
+/* soft glow sprite */
+var glowTex = canvasTex(128, 128, function (c, w, h) {
+  var g = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+  g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.25, 'rgba(255,255,255,.45)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  c.fillStyle = g; c.fillRect(0, 0, w, h);
+});
+/* environment: dark studio with three tinted softboxes, for glossy reflections */
+(function () {
+  var env = canvasTex(1024, 512, function (c, w, h) {
+    var g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#1b2735'); g.addColorStop(0.5, '#0a0f16'); g.addColorStop(1, '#030507'); c.fillStyle = g; c.fillRect(0, 0, w, h);
+    [['#F2A541', 0.12], ['#2FD3C1', 0.45], ['#A07CFF', 0.78]].forEach(function (b) { var x = b[1] * w; var rg = c.createRadialGradient(x, h * 0.28, 0, x, h * 0.28, 120); rg.addColorStop(0, b[0]); rg.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = rg; c.fillRect(x - 140, 0, 280, h * 0.6); });
+    c.fillStyle = 'rgba(230,240,255,.85)'; c.fillRect(w * 0.55, h * 0.06, w * 0.12, 18);
+  });
+  env.mapping = THREE.EquirectangularReflectionMapping;
+  var pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromEquirectangular(env).texture; pm.dispose();
+})();
+
+var hemi = new THREE.HemisphereLight(0x9fc4ff, 0x05070a, 0.35);
+scene.add(hemi);
+var sun = new THREE.DirectionalLight(0xdfe9ff, 0.85);
+sun.position.set(-18, 32, 20);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+var sc = sun.shadow.camera; sc.left = -36; sc.right = 36; sc.top = 30; sc.bottom = -30; sc.near = 1; sc.far = 100;
+sun.shadow.bias = -0.0006;
+scene.add(sun);
+var fill = new THREE.DirectionalLight(0xa07cff, 0.3);
+fill.position.set(20, 14, -16);
+scene.add(fill);
+function setLights() { hemi.intensity = 0.35; sun.intensity = 0.85; fill.intensity = 0.3; }
+setLights();
+
+/* table + grid */
+var tableMat = new THREE.MeshStandardMaterial({ color: '#7d8894', map: floorTex, roughnessMap: floorRough, roughness: 0.8, metalness: 0.15, envMapIntensity: 0.5 });
+var table = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), tableMat);
+table.rotation.x = -Math.PI / 2; table.receiveShadow = true; scene.add(table);
+var gridMat = new THREE.LineBasicMaterial({ color: P.grid, transparent: true, opacity: 0.35 });
+(function () {
+  var pts = [], s = 60, step = 2;
+  for (var v = -s; v <= s; v += step) { pts.push(-s, 0, v, s, 0, v, v, 0, -s, v, 0, s); }
+  var g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  var grid = new THREE.LineSegments(g, gridMat); grid.position.y = 0.01; scene.add(grid);
+})();
+
+/* drifting dust motes catch the light above the floor */
+var dust = (function () {
+  var n = reduceMotion ? 250 : 900, pos = new Float32Array(n * 3);
+  for (var i = 0; i < n; i++) { pos[i * 3] = (Math.random() - 0.5) * 90; pos[i * 3 + 1] = Math.random() * 22; pos[i * 3 + 2] = (Math.random() - 0.5) * 70; }
+  var g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  var pts = new THREE.Points(g, new THREE.PointsMaterial({ color: 0x9fd8ff, size: 0.07, map: glowTex, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending }));
+  scene.add(pts); return pts;
+})();
+
+var edgeMat = new THREE.LineBasicMaterial({ color: P.edge, transparent: true, opacity: 0.6 });
+var edgeMats = {};
+function layerEdgeMat(col) { if (!edgeMats[col]) edgeMats[col] = new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: 0.4 }); return edgeMats[col]; }
+var platformMat = new THREE.MeshStandardMaterial({ color: '#1d2630', map: brushedTex, roughness: 0.62, metalness: 0.45, envMapIntensity: 0.7 });
+function addBox(w, h, d, x, y, z, mat, eMat) {
+  var g = new THREE.BoxGeometry(w, h, d), m = new THREE.Mesh(g, mat);
+  m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true;
+  m.add(new THREE.LineSegments(new THREE.EdgesGeometry(g), eMat || edgeMat));
+  scene.add(m); return m;
+}
+
+/* ---------- labels ---------- */
+var labelsEl = $('#labels'), LABELS = [];
+function makeLabel(cls, html, getPos) {
+  var el = document.createElement('div'); el.className = 'lbl ' + cls; el.innerHTML = html; el.style.display = 'none';
+  labelsEl.appendChild(el);
+  var L = { el: el, getPos: getPos, show: true, shown: false }; LABELS.push(L); return L;
+}
+
+/* ---------- platforms ---------- */
+var LAYERS = [
+  { name: 'Rate layer', x: -14, z: 0, w: 12, d: 8 },
+  { name: 'Detection layer', x: 0, z: 0, w: 14, d: 10 },
+  { name: 'UI layer', x: 14, z: 0, w: 12, d: 8 },
+  { name: 'main thread', x: 0, z: -11.5, w: 6, d: 5 }
+];
+LAYERS.forEach(function (L) {
+  var col = LAYER_COL[L.name];
+  addBox(L.w, 0.5, L.d, L.x, 0.25, L.z, platformMat, layerEdgeMat(col));
+  /* glowing inlay rim and floor wash around each platform */
+  var rim = new THREE.Mesh(new THREE.BoxGeometry(L.w + 0.36, 0.06, L.d + 0.36), new THREE.MeshBasicMaterial({ color: new THREE.Color(col).multiplyScalar(0.32) }));
+  rim.position.set(L.x, 0.04, L.z); scene.add(rim);
+  var halo = new THREE.Mesh(new THREE.PlaneGeometry(L.w + 8, L.d + 8), new THREE.MeshBasicMaterial({ color: col, map: glowTex, transparent: true, opacity: 0.07, depthWrite: false, blending: THREE.AdditiveBlending }));
+  halo.rotation.x = -Math.PI / 2; halo.position.set(L.x, 0.02, L.z); scene.add(halo);
+  var pl = new THREE.PointLight(col, 0.55, 18, 2); pl.position.set(L.x, 6.5, L.z + 1.5); scene.add(pl);
+  var p = new THREE.Vector3(L.x - L.w / 2 + 0.2, 0.55, L.z + L.d / 2 + 0.9);
+  L.label = makeLabel('layer', L.name, function () { return p; });
+  L.label.el.style.transformOrigin = 'left'; L.label.el.style.color = col;
+});
+
+/* ---------- blocks ---------- */
+var BLOCKS = {
+  main: { name: 'ArbitrageApplication', layer: 'main thread', x: 0, z: -11.5, h: 4.2, w: 2.6,
+    role: 'The program\'s entry point. It boots Spring Boot, which wires every other class together as beans, switches on the scheduler, and then opens the Swing window inside the same JVM.',
+    methods: ['main(String[] args)', '@SpringBootApplication', '@EnableScheduling'] },
+  provider: { name: 'SimulatedRateProvider', layer: 'Rate layer', x: -17.6, z: 0, h: 2.2,
+    role: 'A simulated forex market. On every tick each currency\'s price drifts by a small random walk, and now and then it deliberately mis-prices one pair so there is an arbitrage to find.',
+    methods: ['fetchLatest(): RateSnapshot', 'randomWalk()', 'injectArbitrage()'] },
+  scheduler: { name: 'RateUpdateScheduler', layer: 'Rate layer', x: -14, z: 0, h: 1.6,
+    role: 'A Spring task that fires once per second. It pulls a fresh snapshot from the provider, saves it to the RateStore, and kicks off detection.',
+    methods: ['@Scheduled(fixedRate = 1000)', 'refresh()'] },
+  ratestore: { name: 'RateStore', layer: 'Rate layer', x: -10.4, z: 0, h: 1.9,
+    role: 'Holds the latest RateSnapshot in an AtomicReference, so the scheduler thread can write and the Swing thread can read at the same time without locks or half-written data.',
+    methods: ['update(RateSnapshot s)', 'getLatest(): RateSnapshot'] },
+  graphbuilder: { name: 'GraphBuilder', layer: 'Detection layer', x: -4.6, z: 3, h: 1.8,
+    role: 'Turns the rate matrix into a list of directed, weighted edges, one per ordered currency pair, with weight w = −log(rate × (1 − fee)).',
+    methods: ['build(RateSnapshot s, double fee): List<Edge>'] },
+  detector: { name: 'BellmanFordDetector', layer: 'Detection layer', x: 0, z: 3, h: 3.2,
+    role: 'The brain of the project. It relaxes every edge for V − 1 rounds; if a V-th round can still shorten a distance, the graph has a negative cycle, and it walks the parent pointers to recover it.',
+    methods: ['findCycle(List<Edge> edges, int n)', 'traceCycle(int[] parent, int v)'] },
+  oppstore: { name: 'OpportunityStore', layer: 'Detection layer', x: 4.6, z: 3, h: 1.9,
+    role: 'The list of detected opportunities, kept in a CopyOnWriteArrayList so the UI can iterate over it without locking while the scheduler keeps appending.',
+    methods: ['add(ArbitrageOpportunity o)', 'getLatest()', 'getHistory()'] },
+  service: { name: 'ArbitrageService', layer: 'Detection layer', x: -4.6, z: -3, h: 1.6,
+    role: 'The orchestrator. It asks GraphBuilder for edges, runs the detector, checks the cycle is still profitable after fees, and saves the result.',
+    methods: ['detect(RateSnapshot s)'] },
+  validator: { name: 'TriangleValidator', layer: 'Detection layer', x: 0, z: -3, h: 1.6,
+    role: 'A brute-force cross-check: it multiplies the rates around every possible 3-currency cycle directly, to confirm what Bellman-Ford reports.',
+    methods: ['findTriangles(double[][] rates)'] },
+  profit: { name: 'ProfitCalculator', layer: 'Detection layer', x: 4.6, z: -3, h: 1.6,
+    role: 'Multiplies the rates along a cycle, deducts the fee on every hop, and returns the net profit as a percentage.',
+    methods: ['profitPercent(List<Integer> path, double[][] rates)'] },
+  mainframe: { name: 'MainFrame', layer: 'UI layer', x: 9.6, z: 2.6, h: 1.6,
+    role: 'The JFrame window. A BorderLayout holds the toolbar, the network graph, the opportunity table and a status bar.',
+    methods: ['init()', 'showWindow()'] },
+  network: { name: 'NetworkPanel', layer: 'UI layer', x: 12.5, z: 2.6, h: 1.8,
+    role: 'A JPanel whose paintComponent draws the currency network with Graphics2D, painting any profitable cycle in red.',
+    methods: ['paintComponent(Graphics g)', 'setHighlight(List<String> cycle)'] },
+  table: { name: 'OpportunityTablePanel', layer: 'UI layer', x: 15.4, z: 2.6, h: 1.6,
+    role: 'A JTable listing each opportunity\'s path, profit percentage and detection time, newest first.',
+    methods: ['refresh(List<ArbitrageOpportunity> list)'] },
+  refresher: { name: 'UiRefresher', layer: 'UI layer', x: 18.3, z: 2.6, h: 1.4,
+    role: 'A javax.swing.Timer that reads both stores once per second and asks the panels to repaint on the Event Dispatch Thread.',
+    methods: ['tick()'] }
+};
+/* engraved nameplate on the front face of every class block */
+function nameplate(name, col, w) {
+  var t = canvasTex(1024, 150, function (c, W, H) {
+    c.fillStyle = 'rgba(6,9,13,.88)'; c.beginPath(); c.moveTo(14, 0); c.arcTo(W, 0, W, H, 14); c.arcTo(W, H, 0, H, 14); c.arcTo(0, H, 0, 0, 14); c.arcTo(0, 0, W, 0, 14); c.fill();
+    c.fillStyle = col; c.fillRect(30, 50, 10, 50);
+    var fs = 64; c.font = '600 ' + fs + 'px "JetBrains Mono", Menlo, monospace';
+    while (c.measureText(name).width > W - 90 && fs > 30) { fs -= 2; c.font = '600 ' + fs + 'px "JetBrains Mono", Menlo, monospace'; }
+    c.fillStyle = '#D9E2EA'; c.textBaseline = 'middle'; c.fillText(name, 62, H / 2 + 3);
+  });
+  var pw = w * 0.9;
+  return new THREE.Mesh(new THREE.PlaneGeometry(pw, pw * 150 / 1024), new THREE.MeshStandardMaterial({ map: t, transparent: true, roughness: 0.7, metalness: 0.2 }));
+}
+var blockMeshes = [];
+Object.keys(BLOCKS).forEach(function (id) {
+  var b = BLOCKS[id], w = b.w || 2.2, col = new THREE.Color(LAYER_COL[b.layer]);
+  var base = new THREE.Color('#26313d').lerp(col, 0.22), hot = new THREE.Color('#3a5266').lerp(col, 0.5);
+  var mat = new THREE.MeshStandardMaterial({ color: base.clone(), map: panelTex, roughness: 0.66, metalness: 0.35,
+    emissive: col, emissiveMap: stripTex, emissiveIntensity: 0.14, envMapIntensity: 0.6 });
+  var m = addBox(w, b.h, w, b.x, 0.5 + b.h / 2, b.z, mat, layerEdgeMat(LAYER_COL[b.layer]));
+  m.userData.id = id; m.userData.base = base; m.userData.hot = hot; m.userData.dim = base.clone().multiplyScalar(0.45);
+  var np = nameplate(b.name, LAYER_COL[b.layer], w); np.position.set(0, b.h / 2 - 0.36, w / 2 + 0.012); m.add(np); b.color = LAYER_COL[b.layer]; b.mesh = m; blockMeshes.push(m);
+  var top = new THREE.Vector3(b.x, 0.5 + b.h + 0.25, b.z);
+  b.top = top;
+  b.label = makeLabel('', b.name, function () { return top; });
+});
+function anchorOf(id) {
+  if (id === 'monitor') return new THREE.Vector3(14, 4.9, -0.7);
+  return BLOCKS[id].top.clone().setY(BLOCKS[id].top.y - 0.1);
+}
+
+/* thread footprints: glowing pools of light under each block */
+function footMat(c, o) { return new THREE.MeshBasicMaterial({ color: c, map: glowTex, transparent: true, opacity: o, depthWrite: false, blending: THREE.AdditiveBlending }); }
+var footMats = { brass: footMat(P.brass, 0.95), accent: footMat(P.accent, 0.95), shared: footMat('#C9D6E3', 0.7) };
+var THREAD_OF = { provider: 'brass', scheduler: 'brass', graphbuilder: 'brass', service: 'brass', detector: 'brass', validator: 'brass', profit: 'brass',
+  ratestore: 'shared', oppstore: 'shared', mainframe: 'accent', network: 'accent', table: 'accent', refresher: 'accent' };
+var footprints = [];
+Object.keys(THREAD_OF).forEach(function (id) {
+  var b = BLOCKS[id], f = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 4.4), footMats[THREAD_OF[id]]);
+  f.rotation.x = -Math.PI / 2; f.position.set(b.x, 0.515, b.z); f.visible = false; scene.add(f); footprints.push(f);
+});
+
+/* ---------- monitor ---------- */
+var monFrameMat = new THREE.MeshStandardMaterial({ color: '#151c24', map: brushedTex, roughness: 0.3, metalness: 0.9, envMapIntensity: 1.3 });
+addBox(0.5, 2.6, 0.5, 14, 1.8, -1.6, monFrameMat, layerEdgeMat(LAYER_COL['UI layer']));
+addBox(2.4, 0.18, 1.6, 14, 0.59, -1.6, monFrameMat, layerEdgeMat(LAYER_COL['UI layer']));
+addBox(7.6, 4.7, 0.3, 14, 5.15, -1.5, monFrameMat, layerEdgeMat(LAYER_COL['UI layer']));
+var monCanvas = document.createElement('canvas'); monCanvas.width = 1024; monCanvas.height = 620;
+var monTex = new THREE.CanvasTexture(monCanvas);
+monTex.anisotropy = MAX_ANISO;
+var screen = new THREE.Mesh(new THREE.PlaneGeometry(7.2, 4.36), new THREE.MeshBasicMaterial({ map: monTex, toneMapped: false }));
+screen.position.set(14, 5.15, -1.33); scene.add(screen);
+/* the screen spills violet light onto the platform below */
+var screenGlow = new THREE.Mesh(new THREE.PlaneGeometry(11, 7), new THREE.MeshBasicMaterial({ color: LAYER_COL['UI layer'], map: glowTex, transparent: true, opacity: 0.1, depthWrite: false, blending: THREE.AdditiveBlending }));
+screenGlow.position.set(14, 5.15, -1.7); scene.add(screenGlow);
+
+/* ---------- currency graph ---------- */
+var GY = 6.4;
+var COIN_POS = [new THREE.Vector3(-2.7, GY, -2.1), new THREE.Vector3(2.7, GY, -2.1), new THREE.Vector3(2.7, GY, 2.1), new THREE.Vector3(-2.7, GY, 2.1)];
+var SYMBOL = ['$', '€', '£', '₹'];
+var graph = new THREE.Group(); scene.add(graph); graph.visible = false;
+/* holographic dais: a dark glass disc etched with concentric rings */
+var plateTex = canvasTex(1024, 1024, function (c, w, h) {
+  c.fillStyle = '#0a1219'; c.fillRect(0, 0, w, h);
+  var g = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2); g.addColorStop(0, 'rgba(47,211,193,.22)'); g.addColorStop(1, 'rgba(47,211,193,0)'); c.fillStyle = g; c.fillRect(0, 0, w, h);
+  c.strokeStyle = 'rgba(47,211,193,.35)';
+  for (var r = 60; r < w / 2; r += 48) { c.lineWidth = r % 144 === 12 ? 3 : 1; c.beginPath(); c.arc(w / 2, h / 2, r, 0, Math.PI * 2); c.stroke(); }
+  for (var a = 0; a < 72; a++) { var t = a / 72 * Math.PI * 2, r0 = w / 2 - 34, r1 = w / 2 - (a % 6 ? 22 : 6); c.lineWidth = a % 6 ? 1.5 : 3; c.beginPath(); c.moveTo(w / 2 + Math.cos(t) * r0, h / 2 + Math.sin(t) * r0); c.lineTo(w / 2 + Math.cos(t) * r1, h / 2 + Math.sin(t) * r1); c.stroke(); }
+});
+var plateMat = new THREE.MeshStandardMaterial({ color: '#ffffff', map: plateTex, emissive: '#2FD3C1', emissiveMap: plateTex, emissiveIntensity: 0.28, roughness: 0.15, metalness: 0.6, transparent: true, opacity: 0.82 });
+var plate = new THREE.Mesh(new THREE.CylinderGeometry(4.9, 4.9, 0.08, 96), [new THREE.MeshBasicMaterial({ color: '#2FD3C1' }), plateMat, plateMat]);
+plate.position.set(0, GY - 0.22, 0); plate.receiveShadow = true; graph.add(plate);
+var rodMat = new THREE.MeshStandardMaterial({ color: '#2FD3C1', emissive: '#2FD3C1', emissiveIntensity: 0.25, roughness: 0.4, transparent: true, opacity: 0.45 });
+var rod = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, GY - 0.75, 12), rodMat);
+rod.position.set(0, (GY - 0.25) / 2 + 0.25, 0); graph.add(rod);
+/* slow rotating scanner ring around the dais */
+var scanRing = new THREE.Mesh(new THREE.TorusGeometry(5.15, 0.025, 6, 160), new THREE.MeshBasicMaterial({ color: '#2FD3C1', transparent: true, opacity: 0.3 }));
+scanRing.rotation.x = -Math.PI / 2; scanRing.position.set(0, GY - 0.18, 0); graph.add(scanRing);
+var beam = new THREE.Mesh(new THREE.CylinderGeometry(4.9, 1.2, GY - 0.6, 64, 1, true), new THREE.MeshBasicMaterial({ color: '#2FD3C1', transparent: true, opacity: 0.045, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
+beam.position.set(0, (GY - 0.6) / 2 + 0.3, 0); graph.add(beam);
+
+/* minted coins: brass rim, engraved face with the currency symbol */
+var coinMat = new THREE.MeshStandardMaterial({ color: P.brass, map: brushedTex, roughness: 0.28, metalness: 1, envMapIntensity: 1.6 });
+function coinFace(sym) {
+  var t = canvasTex(512, 512, function (c, w, h) {
+    var g = c.createRadialGradient(w * 0.38, h * 0.32, 10, w / 2, h / 2, w / 2); g.addColorStop(0, '#FFE2A8'); g.addColorStop(0.55, '#E39A33'); g.addColorStop(1, '#8A5414'); c.fillStyle = g; c.fillRect(0, 0, w, h);
+    noise(c, w, h, 5000, 0.12, false);
+    c.strokeStyle = 'rgba(80,45,8,.75)'; c.lineWidth = 10; c.beginPath(); c.arc(w / 2, h / 2, w / 2 - 34, 0, Math.PI * 2); c.stroke();
+    c.strokeStyle = 'rgba(255,240,200,.55)'; c.lineWidth = 3; c.beginPath(); c.arc(w / 2, h / 2, w / 2 - 46, 0, Math.PI * 2); c.stroke();
+    for (var k = 0; k < 48; k++) { var a = k / 48 * Math.PI * 2; c.fillStyle = 'rgba(80,45,8,.6)'; c.beginPath(); c.arc(w / 2 + Math.cos(a) * (w / 2 - 18), h / 2 + Math.sin(a) * (w / 2 - 18), 5, 0, Math.PI * 2); c.fill(); }
+    c.font = '700 270px "Familjen Grotesk", Helvetica, Arial, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillStyle = 'rgba(255,245,215,.65)'; c.fillText(sym, w / 2 - 4, h / 2 + 14);
+    c.fillStyle = 'rgba(70,38,6,.9)'; c.fillText(sym, w / 2 + 4, h / 2 + 22);
+  });
+  return new THREE.MeshStandardMaterial({ map: t, roughness: 0.3, metalness: 0.85, envMapIntensity: 1.5 });
+}
+var COINS = COIN_POS.map(function (p, i) {
+  var face = coinFace(SYMBOL[i]);
+  var c = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.16, 64), [coinMat, face, face]);
+  c.position.copy(p); c.castShadow = true; graph.add(c);
+  var ringMat = new THREE.MeshBasicMaterial({ color: P.signal, toneMapped: false });
+  var ring = new THREE.Mesh(new THREE.TorusGeometry(0.86, 0.045, 8, 56), ringMat);
+  ring.rotation.x = -Math.PI / 2; ring.position.copy(p); ring.visible = false; graph.add(ring);
+  var aura = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: P.signal, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending }));
+  aura.scale.set(3, 3, 3); aura.position.copy(p); aura.visible = false; graph.add(aura);
+  var lp = p.clone().add(new THREE.Vector3(0, 0.55, 0));
+  var lab = makeLabel('coin', '<span>' + CUR[i] + '</span><span class="d"></span>', function () { return lp; });
+  return { mesh: c, ring: ring, ringMat: ringMat, aura: aura, label: lab };
+});
+
+var EDGES = [];
+(function () {
+  var up = new THREE.Vector3(0, 1, 0);
+  for (var i = 0; i < 4; i++) for (var j = 0; j < 4; j++) {
+    if (i === j) continue;
+    var a = COIN_POS[i], b = COIN_POS[j];
+    var dir = b.clone().sub(a).normalize(), perp = new THREE.Vector3(-dir.z, 0, dir.x);
+    var start = a.clone().addScaledVector(dir, 0.82).addScaledVector(perp, 0.2);
+    var end = b.clone().addScaledVector(dir, -0.95).addScaledVector(perp, 0.2);
+    var ctrl = a.clone().add(b).multiplyScalar(0.5).addScaledVector(perp, 0.62).add(new THREE.Vector3(0, 0.18, 0));
+    var curve = new THREE.QuadraticBezierCurve3(start, ctrl, end);
+    var mat = new THREE.MeshStandardMaterial({ color: P.tube, emissive: '#000000', roughness: 0.35, metalness: 0.4 });
+    var tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 48, 0.034, 8, false), mat);
+    var cone = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.3, 14), mat);
+    cone.position.copy(curve.getPoint(1)); cone.quaternion.setFromUnitVectors(up, curve.getTangent(1).normalize());
+    cone.position.addScaledVector(curve.getTangent(1).normalize(), 0.1);
+    graph.add(tube); graph.add(cone);
+    /* a spark that runs along lit edges */
+    var spark = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: '#ffffff', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    spark.scale.set(0.5, 0.5, 0.5); spark.visible = false; graph.add(spark);
+    var mid = curve.getPoint(0.5).add(new THREE.Vector3(0, 0.12, 0));
+    var lab = makeLabel('w', '', (function (m) { return function () { return m; }; })(mid));
+    EDGES.push({ i: i, j: j, curve: curve, tube: tube, cone: cone, mat: mat, spark: spark, label: lab, state: 'base' });
+  }
+})();
+function edgeIndex(u, v) { for (var k = 0; k < EDGES.length; k++) if (EDGES[k].i === u && EDGES[k].j === v) return k; return -1; }
+function setEdge(k, state) {
+  var e = EDGES[k]; e.state = state;
+  var col = state === 'cycle' ? P.signal : state === 'check' ? P.accent : state === 'relax' ? P.brass : P.tube;
+  e.mat.color.set(col);
+  var s = state === 'cycle' ? 1.9 : state === 'base' ? 1 : 1.5;
+  e.tube.scale.set(1, 1, 1); e.cone.scale.set(s, s, s);
+  e.mat.emissive.set(state === 'base' ? '#000000' : col);
+  e.mat.emissiveIntensity = state === 'cycle' ? 0.85 : state === 'base' ? 0 : 0.55;
+  e.spark.visible = state !== 'base'; e.spark.material.color.set(col);
+}
+function resetEdges() { for (var k = 0; k < EDGES.length; k++) setEdge(k, 'base'); }
+function setGrow(p) {
+  EDGES.forEach(function (e, idx) {
+    var q = Math.max(0, Math.min(1, p * 1.6 - idx * 0.05));
+    var cnt = e.tube.geometry.index.count;
+    e.tube.geometry.setDrawRange(0, Math.floor(cnt * q / 3) * 3);
+    e.cone.visible = q >= 1;
+  });
+  COINS.forEach(function (c, i) { var s = Math.max(0.001, Math.min(1, p * 2.2 - i * 0.18)); c.mesh.scale.set(s, s, s); });
+}
+function showCycle(cyc) {
+  resetEdges(); COINS.forEach(function (c) { c.ring.visible = false; c.aura.visible = false; c.label.el.classList.remove('hot'); });
+  if (!cyc) return;
+  for (var i = 0; i < cyc.length - 1; i++) {
+    setEdge(edgeIndex(cyc[i], cyc[i + 1]), 'cycle');
+    COINS[cyc[i]].ring.visible = true; COINS[cyc[i]].ringMat.color.set(P.signal); COINS[cyc[i]].aura.visible = true; COINS[cyc[i]].label.el.classList.add('hot');
+  }
+}
+function setDistLabels(dist) {
+  COINS.forEach(function (c, i) { c.label.el.querySelector('.d').textContent = dist ? 'dist ' + fmtD(dist[i]) : ''; });
+}
+function setWeightLabels(on, rates) {
+  EDGES.forEach(function (e) {
+    e.label.show = on;
+    if (on) { var w = -Math.log(rates[e.i][e.j] * (1 - FEE)); e.label.el.textContent = fmtD(w); e.label.el.classList.toggle('neg', w < 0); }
+  });
+}
+
+/* ---------- packets: glowing comets with light trails ---------- */
+var PACKETS = [], packetGeo = new THREE.SphereGeometry(0.2, 20, 14), packetMats = {}, TRAIL = 26;
+function packetMat(color) { if (!packetMats[color]) packetMats[color] = new THREE.MeshStandardMaterial({ color: color, emissive: color, emissiveIntensity: 0.9, roughness: 0.25, metalness: 0.3 }); return packetMats[color]; }
+function sendPacket(from, to, color, speed) {
+  return new Promise(function (resolve) {
+    var a = anchorOf(from), b = anchorOf(to), d = a.distanceTo(b);
+    var ctrl = a.clone().add(b).multiplyScalar(0.5).add(new THREE.Vector3(0, 1.4 + d * 0.22, 0));
+    var curve = new THREE.QuadraticBezierCurve3(a, ctrl, b);
+    var col = color || P.brass;
+    var m = new THREE.Mesh(packetGeo, packetMat(col)); m.castShadow = true; m.position.copy(a); scene.add(m);
+    var halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: col, transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending }));
+    halo.scale.set(1.0, 1.0, 1.0); m.add(halo);
+    var tp = new Float32Array(TRAIL * 3), tc = new Float32Array(TRAIL * 3), cc = new THREE.Color(col);
+    for (var i = 0; i < TRAIL; i++) { tp[i * 3] = a.x; tp[i * 3 + 1] = a.y; tp[i * 3 + 2] = a.z; var f = Math.pow(1 - i / TRAIL, 1.6); tc[i * 3] = cc.r * f; tc[i * 3 + 1] = cc.g * f; tc[i * 3 + 2] = cc.b * f; }
+    var tg = new THREE.BufferGeometry(); tg.setAttribute('position', new THREE.BufferAttribute(tp, 3)); tg.setAttribute('color', new THREE.BufferAttribute(tc, 3));
+    var trail = new THREE.Line(tg, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+    trail.frustumCulled = false; scene.add(trail);
+    var dur = reduceMotion ? 120 : (650 + d * 45) / (speed || 1);
+    PACKETS.push({ mesh: m, halo: halo, trail: trail, curve: curve, t0: performance.now(), dur: dur, done: resolve });
+  });
+}
+function dropPacket(p) { scene.remove(p.mesh); scene.remove(p.trail); p.trail.geometry.dispose(); p.trail.material.dispose(); p.halo.material.dispose(); }
+function clearPackets() { PACKETS.forEach(function (p) { dropPacket(p); p.done(); }); PACKETS = []; }
+function chain(ids, color, run, speed) {
+  var p = Promise.resolve();
+  ids.slice(0, -1).forEach(function (id, i) { p = p.then(function () { if (run !== runId) return; return sendPacket(id, ids[i + 1], color, speed); }); });
+  return p;
+}
+function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+/* ---------- monitor drawing ---------- */
+var monState = { cycle: null, opps: [], live: false, ticks: 0 };
+function rr(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+function drawMonitor() {
+  var c = monCanvas.getContext('2d'), W = monCanvas.width, H = monCanvas.height, sans = '"Familjen Grotesk", Helvetica, Arial, sans-serif', mono = '"JetBrains Mono", Menlo, monospace';
+  var bgG = c.createLinearGradient(0, 0, 0, H); bgG.addColorStop(0, '#0E1620'); bgG.addColorStop(1, '#070B10'); c.fillStyle = bgG; c.fillRect(0, 0, W, H);
+  c.fillStyle = P.line; c.fillRect(0, 56, W, 1);
+  c.fillStyle = P.ink; c.font = '600 24px ' + sans; c.fillText('Forex Arbitrage Detector', 28, 37);
+  c.fillStyle = monState.live ? P.signal : P.ink2; c.font = '500 18px ' + sans; c.textAlign = 'right';
+  c.fillText(monState.live ? '● Live' : monState.cycle ? '● Detected' : '○ Waiting', W - 28, 36); c.textAlign = 'left';
+  c.strokeStyle = P.line; c.lineWidth = 2; rr(c, 24, 76, 520, 480, 14); c.stroke(); rr(c, 564, 76, 436, 480, 14); c.stroke();
+  c.fillStyle = P.ink2; c.font = '600 17px ' + sans; c.fillText('NetworkPanel', 44, 106); c.fillText('OpportunityTablePanel', 584, 106);
+  var pos = [[150, 200], [420, 200], [420, 440], [150, 440]];
+  function arrow(a, b, col, wdt) {
+    var dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L, px = -uy * 9, py = ux * 9;
+    var sx = a[0] + ux * 42 + px, sy = a[1] + uy * 42 + py, ex = b[0] - ux * 46 + px, ey = b[1] - uy * 46 + py;
+    c.strokeStyle = col; c.lineWidth = wdt; c.beginPath(); c.moveTo(sx, sy); c.lineTo(ex, ey); c.stroke();
+    c.fillStyle = col; c.beginPath(); c.moveTo(ex + ux * 4, ey + uy * 4); c.lineTo(ex - ux * 14 - uy * 7, ey - uy * 14 + ux * 7); c.lineTo(ex - ux * 14 + uy * 7, ey - uy * 14 - ux * 7); c.closePath(); c.fill();
+  }
+  var cyc = monState.cycle, inCyc = {};
+  if (cyc) for (var k = 0; k < cyc.length - 1; k++) inCyc[cyc[k] + '-' + cyc[k + 1]] = 1;
+  for (var i = 0; i < 4; i++) for (var j = 0; j < 4; j++) if (i !== j && !inCyc[i + '-' + j]) arrow(pos[i], pos[j], P.line, 2);
+  for (var key in inCyc) { var s = key.split('-'); arrow(pos[+s[0]], pos[+s[1]], P.signal, 5); }
+  pos.forEach(function (p, idx) {
+    var hot = cyc && cyc.indexOf(idx) >= 0;
+    c.fillStyle = P.screen; c.beginPath(); c.arc(p[0], p[1], 36, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = hot ? P.signal : P.ink2; c.lineWidth = hot ? 4 : 2; c.stroke();
+    c.fillStyle = P.ink; c.font = '600 20px ' + sans; c.textAlign = 'center'; c.fillText(CUR[idx], p[0], p[1] + 7); c.textAlign = 'left';
+  });
+  c.font = '600 16px ' + sans; c.fillStyle = P.ink2;
+  c.fillText('Path', 584, 146); c.textAlign = 'right'; c.fillText('Profit %', 900, 146); c.fillText('Time', 984, 146); c.textAlign = 'left';
+  c.fillStyle = P.line; c.fillRect(580, 158, 404, 2);
+  if (!monState.opps.length) { c.fillStyle = P.ink2; c.font = '400 17px ' + sans; c.fillText('No opportunities yet', 584, 196); }
+  monState.opps.slice(0, 8).forEach(function (o, r) {
+    var y = 192 + r * 44;
+    if (r === 0) { c.fillStyle = P.signal; c.globalAlpha = 0.13; c.fillRect(580, y - 26, 404, 40); c.globalAlpha = 1; }
+    c.fillStyle = r === 0 ? P.signal : P.ink; c.font = '500 16px ' + mono;
+    c.fillText(o.path.map(function (x) { return CUR[x]; }).join('→'), 584, y);
+    c.textAlign = 'right'; c.fillText(o.profit.toFixed(3), 900, y); c.fillText(o.time, 984, y); c.textAlign = 'left';
+    c.fillStyle = P.line; c.fillRect(580, y + 18, 404, 1);
+  });
+  c.fillStyle = P.ink2; c.font = '400 16px ' + sans;
+  c.fillText('Status: ' + (monState.live ? 'tick ' + monState.ticks + ', ' : '') + monState.opps.length + ' cycles found, fee ' + (FEE * 100).toFixed(2) + '%', 28, 592);
+  c.fillStyle = 'rgba(255,255,255,.025)'; for (var sl = 0; sl < H; sl += 4) c.fillRect(0, sl, W, 1);
+  monTex.needsUpdate = true;
+}
+function timeStr() { return new Date().toLocaleTimeString('en-GB'); }
+
+/* ---------- camera: orbit + tween ---------- */
+var orbit = { target: new THREE.Vector3(), r: 40, theta: 0, phi: 1 };
+function applyOrbit() {
+  var o = orbit, sp = Math.sin(o.phi);
+  camera.position.set(o.target.x + o.r * sp * Math.sin(o.theta), o.target.y + o.r * Math.cos(o.phi), o.target.z + o.r * sp * Math.cos(o.theta));
+  camera.lookAt(o.target);
+}
+function presetToOrbit(pr) {
+  var t = new THREE.Vector3().fromArray(pr.t), off = new THREE.Vector3().fromArray(pr.p).sub(t), r = off.length();
+  var narrow = camera.aspect < 0.85 ? 1.55 : camera.aspect < 1.2 ? 1.25 : 1;
+  return { target: t, r: r * narrow, theta: Math.atan2(off.x, off.z), phi: Math.acos(off.y / r) };
+}
+var camTween = null;
+function flyTo(pr) {
+  var to = presetToOrbit(pr), from = { target: orbit.target.clone(), r: orbit.r, theta: orbit.theta, phi: orbit.phi };
+  var dTheta = to.theta - from.theta; while (dTheta > Math.PI) dTheta -= 2 * Math.PI; while (dTheta < -Math.PI) dTheta += 2 * Math.PI;
+  camTween = { t0: performance.now(), dur: reduceMotion ? 1 : 1500, from: from, to: to, dTheta: dTheta };
+}
+function ease(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+
+var CAM = {
+  overview: { p: [0, 30, 40], t: [0, 1.5, -1] },
+  main: { p: [9, 10, -2], t: [0, 2.2, -11.5] },
+  rate: { p: [-14, 10, 15], t: [-14, 1.3, 0] },
+  store: { p: [-6.5, 7, 9], t: [-10.4, 1.6, 0] },
+  graphIn: { p: [0, 14, 17], t: [0, 4.5, 0] },
+  graph: { p: [0, 15.5, 10.5], t: [0, 6, 0.3] },
+  profit: { p: [9.5, 9, 4], t: [4.6, 1.8, -3] },
+  validator: { p: [-4, 9.5, 5], t: [0, 1.8, -3] },
+  oppstore: { p: [8.5, 7.5, 12], t: [4.6, 1.8, 3] },
+  threads: { p: [0, 36, 21], t: [0, 0, -1] },
+  ui: { p: [14, 6.4, 12.5], t: [14, 4.1, 0] },
+  live: { p: [-6, 26, 32], t: [2, 3, -1] }
+};
+
+/* ---------- data panel ---------- */
+var dataEl = $('#data');
+function setData(html) { if (!html) { dataEl.hidden = true; dataEl.innerHTML = ''; return; } dataEl.hidden = false; dataEl.innerHTML = html; dataEl.classList.remove('fade'); void dataEl.offsetWidth; dataEl.classList.add('fade'); }
+function matrixHTML(rates, hi) {
+  var h = '<h3>Rate matrix</h3><p class="sub">rate[i][j] is how many units of currency j you get for one unit of currency i. The red cell is the deliberately mis-priced pair. Hover any cell to find that edge in the model.</p><table><tr><th>from \\ to</th>';
+  CUR.forEach(function (c) { h += '<th>' + c + '</th>'; }); h += '</tr>';
+  rates.forEach(function (row, i) { h += '<tr><td>' + CUR[i] + '</td>'; row.forEach(function (v, j) { h += '<td class="' + (i === j ? 'dim' : hi && hi[i + '-' + j] ? 'hi' : '') + '"' + (i === j ? '' : ' data-edge="' + i + '-' + j + '"') + '>' + (i === j ? '1' : fmtRate(v)) + '</td>'; }); h += '</tr>'; });
+  return h + '</table><p class="note">Every quote already includes a bid/ask spread: 0.1% on major pairs and 0.4% on INR pairs. On top of that, each conversion is charged a separate ' + (FEE * 100).toFixed(2) + '% fee.</p>';
+}
+function distHTML(dist, parent, title, sub, flashIdx) {
+  var h = '<h3 id="dist-title">' + title + '</h3><p class="sub">' + sub + '</p><table><tr><th>Node</th><th>dist</th><th>parent</th></tr>';
+  CUR.forEach(function (c, i) { h += '<tr data-node="' + i + '"><td>' + c + '</td><td id="d' + i + '" class="' + (flashIdx === i ? 'flash' : '') + '">' + fmtD(dist[i]) + '</td><td id="p' + i + '">' + (parent[i] < 0 ? '−1' : CUR[parent[i]]) + '</td></tr>'; });
+  return h + '</table>';
+}
+function updateDist(ev) {
+  var t = $('#dist-title'); if (!t) return;
+  t.textContent = 'Round ' + ev.round + ' of ' + (TOUR.bf.n - 1);
+  for (var i = 0; i < 4; i++) { var d = $('#d' + i), p = $('#p' + i); if (!d) return; d.textContent = fmtD(ev.dist[i]); p.textContent = ev.parent[i] < 0 ? '−1' : CUR[ev.parent[i]]; d.className = ev.relaxed && ev.v === i ? 'flash' : ''; }
+  var s = $('#dist-sub'); if (s) s.textContent = 'Checking ' + CUR[ev.u] + ' → ' + CUR[ev.v] + (ev.relaxed ? ': relaxed, shorter path found' : ': no improvement');
+}
+function mathHTML() {
+  var r = TOUR.rates;
+  return '<h3>From a product to a sum</h3><p class="sub">The rates along USD → EUR → GBP → USD</p>' +
+    '<p class="eq">0.90 × 0.88 × 1.27 = <span class="g">' + (r[0][1] * r[1][2] * r[2][0]).toFixed(5) + '</span> &gt; 1</p>' +
+    '<p class="eq">−ln 0.90 = +0.1054<br>−ln 0.88 = +0.1278<br>−ln 1.27 = −0.2390</p>' +
+    '<p class="eq">Sum = <span class="r">−0.0058</span> &lt; 0</p>' +
+    '<p class="note">Because log(a × b) = log a + log b and log(1) = 0, a product above 1 becomes a sum above 0. Negating every term flips that into a sum below 0, which is exactly what Bellman-Ford calls a negative cycle. The weights on the edges now include the fee.</p>';
+}
+function profitHTML() {
+  var cyc = TOUR.cycle, r = TOUR.rates, amt = 1, h = '<h3>Following 1 ' + CUR[cyc[0]] + ' around the loop</h3><p class="sub">A ' + (FEE * 100).toFixed(2) + '% fee is deducted at every conversion</p><div class="chain">';
+  cyc.forEach(function (c) { h += '<span>' + CUR[c] + '</span>'; }); h += '</div><table><tr><th>Step</th><th>Rate</th><th>Amount</th></tr>';
+  h += '<tr><td>Start</td><td></td><td>1.000000 ' + CUR[cyc[0]] + '</td></tr>';
+  for (var i = 0; i < cyc.length - 1; i++) { amt = amt * r[cyc[i]][cyc[i + 1]] * (1 - FEE); h += '<tr data-edge="' + cyc[i] + '-' + cyc[i + 1] + '"><td>' + CUR[cyc[i]] + '→' + CUR[cyc[i + 1]] + '</td><td>' + fmtRate(r[cyc[i]][cyc[i + 1]]) + '</td><td>' + amt.toFixed(6) + '</td></tr>'; }
+  var gross = (cycleProduct(r, cyc) - 1) * 100;
+  return h + '</table><p class="eq">Gross: ' + gross.toFixed(3) + '%<br>After fees: <span class="' + (TOUR.profit > 0 ? 'g' : 'r') + '">' + TOUR.profit.toFixed(3) + '%</span></p>';
+}
+function triHTML() {
+  var h = '<h3>All 8 directed triangles</h3><p class="sub">Product of the three rates × (1 − fee)³. Anything above 1 is an arbitrage. Hover a row to trace it on the graph.</p><table><tr><th>Cycle</th><th>Net</th></tr>';
+  TOUR.tri.forEach(function (t) { h += '<tr class="' + (t.net > 1 ? 'win' : '') + '" data-cycle="' + t.cyc.join(',') + '"><td>' + t.cyc.map(function (i) { return CUR[i]; }).join('→') + '</td><td>' + t.net.toFixed(5) + '</td></tr>'; });
+  var wins = TOUR.tri.filter(function (t) { return t.net > 1; }).length;
+  return h + '</table><p class="note">' + wins + (wins === 1 ? ' triangle is profitable' : ' triangles are profitable') + ', and it is the same cycle Bellman-Ford found. The two methods agree.</p>';
+}
+function oppsHTML(list, title, sub) {
+  var h = '<h3>' + title + '</h3><p class="sub">' + sub + '</p>';
+  if (!list.length) return h + '<p class="empty">No profitable cycle yet. Watch the next tick.</p>';
+  h += '<table><tr><th>Path</th><th>Profit %</th><th>Time</th></tr>';
+  list.slice(0, 8).forEach(function (o, i) { h += '<tr class="' + (i === 0 ? 'win' : '') + '" data-cycle="' + o.path.join(',') + '"><td>' + o.path.map(function (x) { return CUR[x]; }).join('→') + '</td><td>' + o.profit.toFixed(3) + '</td><td>' + o.time + '</td></tr>'; });
+  return h + '</table>';
+}
+function threadsHTML() {
+  return '<h3>Which thread runs where</h3><p class="sub">Look at the pool of light under each block</p><div class="legend">' +
+    '<div><i style="background:' + P.brass + '"></i>Scheduler thread (Spring): rates, graph building, Bellman-Ford</div>' +
+    '<div><i style="background:' + P.accent + '"></i>Swing Event Dispatch Thread: the Timer, panels and repaints</div>' +
+    '<div><i style="background:#C9D6E3"></i>Shared stores: used by both threads, built to be thread-safe</div></div>' +
+    '<p class="note">Amber packets are written by the scheduler; teal packets are read by the EDT. The two threads never call each other directly. They only meet at the stores.</p>';
+}
+
+/* ---------- steps ---------- */
+var bf = TOUR.bf, nRounds = bf.n - 1;
+var lastE = bf.lastEdge;
+function codeBlock(s) { return '<pre><code>' + s + '</code></pre>'; }
+var STEPS = [
+  { title: 'The whole system in one model', cam: 'overview', focus: [],
+    body: '<p>This is the arbitrage detector laid out like an architect\'s model on a night-time trading floor. Each glowing platform is one layer of the application: the amber <b>Rate layer</b> on the left fetches prices, the teal <b>Detection layer</b> in the middle hunts for arbitrage, and the violet <b>UI layer</b> on the right shows the results. The small blue platform at the back is the <b>main thread</b> that starts everything.</p><p>Every block is one Java class. Click any block to see what it is responsible for and its key methods. Drag to orbit the camera, scroll to zoom, and press Next (or the right arrow key) to follow the data through the system.</p>' },
+  { title: 'The main thread starts the system', cam: 'main', focus: ['main'],
+    body: '<p><span class="mono">ArbitrageApplication.main()</span> boots Spring Boot. Spring scans the project, creates one instance (a <b>bean</b>) of every component, injects them into each other, and because of <span class="mono">@EnableScheduling</span> starts the timer that will fire every second.</p><p>Spring Boot normally runs <b>headless</b>, meaning no windows. Calling <span class="mono">headless(false)</span> lets the Swing window open inside the same JVM, so the backend and the desktop UI share memory and talk through plain Java objects instead of HTTP.</p><p>Watch the three packets leave the main block: one wakes the scheduler, one wires up the detector, and one opens the window.</p>' +
+      codeBlock('<span class="k">new</span> SpringApplicationBuilder(\n        ArbitrageApplication.<span class="k">class</span>)\n    .headless(<span class="k">false</span>)\n    .run(args);'),
+    enter: function (run) { return Promise.all([sendPacket('main', 'scheduler', P.brass), sendPacket('main', 'detector', P.brass), sendPacket('main', 'mainframe', P.accent)]); } },
+  { title: 'SimulatedRateProvider: a fake forex market', cam: 'rate', focus: ['provider'],
+    body: '<p>Real exchange-rate feeds cost money and rarely contain arbitrage, so the project simulates its own market. Each currency has a USD price that drifts slightly every tick with a <b>random walk</b>, and every cross rate is derived from those prices: <span class="mono">rate[i][j] = price[i] / price[j]</span>. A small spread is shaved off each quote, just like a real broker does.</p><p>If all rates came from one consistent set of prices, no loop could ever make money. So for this demo one edge is deliberately mispriced: <b>EUR → GBP = 0.88</b>, when the consistent rate would be about 0.875. That half-percent gap is the arbitrage the rest of the system has to find.</p>',
+    data: function () { return matrixHTML(TOUR.rates, { '1-2': 1 }); } },
+  { title: 'A new tick every second', cam: 'rate', focus: ['scheduler'],
+    body: '<p><span class="mono">RateUpdateScheduler</span> is a Spring <span class="mono">@Scheduled</span> method that fires every 1000 ms on Spring\'s scheduler thread. Each run does three things in order: it asks the provider for a fresh <b>RateSnapshot</b>, stores it in the <span class="mono">RateStore</span>, and hands it to the detection service.</p><p>Each amber comet is one snapshot travelling through the pipeline. Using <span class="mono">fixedRate</span> means ticks are scheduled on a steady clock rather than waiting a full second after the previous run finishes.</p>' +
+      codeBlock('@Scheduled(fixedRate = 1000)\n<span class="k">public void</span> refresh() {\n    RateSnapshot s = provider.fetchLatest();\n    store.update(s);\n    service.detect(s);\n}'),
+    enter: function (run) { return chain(['provider', 'scheduler', 'ratestore'], P.brass, run).then(function () { if (run === runId) return sleep(300); }).then(function () { if (run === runId) return chain(['provider', 'scheduler', 'ratestore'], P.brass, run); }); } },
+  { title: 'RateStore: one snapshot, safely shared', cam: 'store', focus: ['ratestore'],
+    body: '<p>Two threads touch the rates: the scheduler thread <b>writes</b> a new snapshot every second, and the Swing thread <b>reads</b> it to draw the screen. If they shared a mutable map, the UI could read half-old, half-new prices in the middle of an update.</p><p>The fix is to make each snapshot immutable and keep a single <span class="mono">AtomicReference</span> to the current one. Swapping the reference is one atomic operation, so a reader always sees either the complete old snapshot or the complete new one, never a mixture, and nobody ever has to take a lock.</p>' +
+      codeBlock('<span class="k">private final</span> AtomicReference&lt;RateSnapshot&gt; latest\n        = <span class="k">new</span> AtomicReference&lt;&gt;();\n\n<span class="k">public void</span> update(RateSnapshot s) { latest.set(s); }\n<span class="k">public</span> RateSnapshot getLatest() { <span class="k">return</span> latest.get(); }') },
+  { title: 'GraphBuilder: turn rates into a graph', cam: 'graphIn', focus: ['graphbuilder'],
+    body: '<p>Arbitrage is a graph problem. Each of the 4 currencies becomes a <b>node</b> (one of the minted coins rising above the dais), and every ordered pair of currencies becomes a <b>directed edge</b>. With 4 nodes that is 4 × 3 = <b>12 edges</b>: USD → EUR and EUR → USD are separate edges with different rates.</p><p>Each edge gets a weight of <span class="mono">w = −log(rate × (1 − fee))</span>. The fee is folded in here so the algorithm only ever reports loops that still make money after costs. The next step explains why the logarithm is there.</p>',
+    enter: function (run) {
+      setGrow(0);
+      return sendPacket('ratestore', 'graphbuilder', P.brass).then(function () {
+        if (run !== runId) return;
+        return new Promise(function (res) { tweens.push({ t0: performance.now(), dur: reduceMotion ? 1 : 1800, fn: function (p) { if (run === runId) setGrow(p); }, done: res }); });
+      });
+    } },
+  { title: 'The log trick: turn multiplication into addition', cam: 'graph', focus: ['graphbuilder'],
+    body: '<p>When you convert money, amounts <b>multiply</b>: 1 USD × 0.90 × 0.88 × 1.27. A loop is profitable when that product ends up above 1. But shortest-path algorithms like Bellman-Ford <b>add</b> edge weights; they cannot multiply.</p><p>Logarithms bridge the gap, because log(a × b) = log a + log b. Taking −log of every rate turns "product greater than 1" into "sum less than 0". A profitable loop therefore becomes a <b>negative-weight cycle</b>, which is exactly the thing Bellman-Ford knows how to detect.</p><p>The weights are now printed on each edge. The red ones are negative, which happens whenever a single rate is above 1 after fees.</p>',
+    data: mathHTML },
+  { title: 'Bellman-Ford begins: every distance is 0', cam: 'graph', focus: ['detector'],
+    body: '<p>The detector keeps two arrays. <span class="mono">dist[v]</span> is the cheapest total weight found so far to reach node v, and <span class="mono">parent[v]</span> remembers which node that cheapest path came from.</p><p>Textbook Bellman-Ford starts one node at 0 and the rest at infinity. Here <b>every</b> node starts at 0, which is equivalent to adding an invisible source node joined to every currency by a zero-weight edge. That way a negative cycle anywhere in the graph is found, not just one reachable from a chosen starting currency.</p>' +
+      codeBlock('Arrays.fill(dist, 0.0);\nArrays.fill(parent, -1);'),
+    data: function () { return distHTML(bf.distAfter[0], bf.parentAfter[0], 'Start', 'Each coin now shows its current dist value'); } },
+  { title: 'V − 1 = ' + nRounds + ' rounds: relax every edge', cam: 'graph', focus: ['detector'],
+    body: '<p>In each round the detector visits all 12 edges. For an edge u → v it asks: is going through u cheaper than the best known way to reach v, i.e. <span class="mono">dist[u] + w &lt; dist[v]</span>? If so, it has found a shortcut, so it <b>relaxes</b> the edge: it lowers <span class="mono">dist[v]</span> and sets <span class="mono">parent[v] = u</span>.</p><p>A shortest path without cycles can use at most V − 1 edges, so V − 1 rounds are enough for every distance to settle in a normal graph. Watch it happen: a <b>teal</b> edge is being checked, an <b>amber</b> flash means it relaxed, and the table on the right updates live.</p><p><button class="btn small" type="button" data-action="replay">Replay the rounds</button></p>' +
+      codeBlock('<span class="k">for</span> (<span class="k">int</span> r = 1; r &lt; n; r++)\n    <span class="k">for</span> (Edge e : edges)\n        <span class="k">if</span> (dist[e.u] + e.w &lt; dist[e.v]) {\n            dist[e.v] = dist[e.u] + e.w;\n            parent[e.v] = e.u;\n        }'),
+    data: function () { return distHTML(bf.distAfter[0], bf.parentAfter[0], 'Round 1 of ' + nRounds, '<span id="dist-sub">Running…</span>'); },
+    dwell: 13000,
+    enter: function (run) {
+      setDistLabels(bf.distAfter[0]);
+      var evs = bf.events.filter(function (e) { return e.round <= nRounds; }), step = reduceMotion ? 25 : 260, p = Promise.resolve();
+      evs.forEach(function (ev) {
+        p = p.then(function () {
+          if (run !== runId) return;
+          resetEdges(); setEdge(ev.k, ev.relaxed ? 'relax' : 'check'); updateDist(ev); setDistLabels(ev.dist);
+          return sleep(ev.relaxed ? step * 1.6 : step);
+        });
+      });
+      return p.then(function () { if (run !== runId) return; resetEdges(); var t = $('#dist-title'); if (t) t.textContent = 'All ' + nRounds + ' rounds complete'; var s = $('#dist-sub'); if (s) s.textContent = 'In a normal graph every distance would now be final'; });
+    } },
+  { title: 'Round V: something still gets cheaper', cam: 'graph', focus: ['detector'],
+    body: '<p>After ' + nRounds + ' rounds every shortest path in a normal graph is final, so one more pass should change nothing. The detector runs that extra round ' + bf.n + ' as a test, and the edge <b>' + (lastE ? CUR[lastE.u] + ' → ' + CUR[lastE.v] : '') + '</b> still relaxes, lighting up in red.</p><p>The only way a distance can keep falling forever is if there is a loop whose total weight is negative: every trip around it makes the path cheaper. That is a <b>negative cycle</b>, and in our log-weighted graph a negative cycle means <b>arbitrage</b>.</p>',
+    data: function () { return distHTML(bf.distAfter[bf.n], bf.parentAfter[bf.n], 'After round ' + bf.n, 'The red edge lowered a distance again', lastE ? lastE.v : -1); } },
+  { title: 'Recover the cycle: walk the parent pointers', cam: 'graph', focus: ['detector'],
+    body: '<p>Knowing a negative cycle exists is not enough; the trader needs the actual path. Start from the node that was updated in the last round and follow <span class="mono">parent[]</span> backwards <b>V times</b>. The node you land on might not have been on the cycle at the start, but after V steps you are guaranteed to be inside it.</p><p>From there, keep following parents until you return to the same node, collecting each one, then reverse the list to get the trading order. The blue ring traces that walk on the coins.</p><p>Result: <b>' + pathText(TOUR.cycle) + '</b></p>' +
+      codeBlock('<span class="k">for</span> (<span class="k">int</span> i = 0; i &lt; n; i++) v = parent[v];\n<span class="c">// v is now guaranteed to be on the cycle</span>'),
+    data: function () { return distHTML(bf.distAfter[bf.n], bf.parentAfter[bf.n], 'Parent pointers', 'Follow the parent column: it loops back on itself'); },
+    enter: function (run) {
+      resetEdges(); COINS.forEach(function (c) { c.ring.visible = false; c.aura.visible = false; c.label.el.classList.remove('hot'); });
+      var p = Promise.resolve(), step = reduceMotion ? 30 : 420;
+      bf.walk.forEach(function (v) { p = p.then(function () { if (run !== runId) return; COINS.forEach(function (c) { c.ring.visible = false; }); COINS[v].ring.visible = true; COINS[v].ringMat.color.set(P.accent); return sleep(step); }); });
+      return p.then(function () { if (run === runId) showCycle(TOUR.cycle); });
+    } },
+  { title: 'ProfitCalculator: what is left after fees', cam: 'profit', focus: ['profit'],
+    body: '<p>A cycle exists, but the real question for a trader is whether it still pays once costs are taken out. <span class="mono">ProfitCalculator</span> answers it with plain arithmetic: start with 1 unit, multiply by each rate along the path, and deduct the fee at every hop.</p><p>Only cycles that end with <b>more than the 1 unit</b> they started with are reported as truly profitable. The table on the right follows the money around the loop one conversion at a time.</p>',
+    data: profitHTML },
+  { title: 'TriangleValidator: a brute-force cross-check', cam: 'validator', focus: ['validator'],
+    body: '<p>To be confident Bellman-Ford is right, a second, much simpler method checks the same rates. With 4 currencies there are 4 ways to choose 3 of them, and each trio can be traded in 2 directions, giving <b>8 directed triangles</b>. The validator simply multiplies the three rates around each one.</p><p>For triangles both approaches cost O(V³). Bellman-Ford earns its place because it finds longer loops through 4, 5 or 6 currencies at the same O(V × E) cost, where brute force would explode combinatorially.</p>',
+    data: triHTML },
+  { title: 'Saved to the OpportunityStore', cam: 'oppstore', focus: ['oppstore'],
+    body: '<p>Each confirmed cycle becomes an immutable <span class="mono">ArbitrageOpportunity</span> record holding the path, the profit percentage and the moment it was detected. Records are pure data, so they can be handed between threads freely.</p><p>The store keeps them in a <span class="mono">CopyOnWriteArrayList</span>. Every write copies the underlying array, which sounds expensive, but writes happen at most once a second while the UI reads constantly, and readers never need a lock or risk a ConcurrentModificationException.</p>' +
+      codeBlock('<span class="k">public record</span> ArbitrageOpportunity(\n    List&lt;String&gt; path,\n    <span class="k">double</span> profitPercent,\n    Instant detectedAt) {}'),
+    data: function () { return oppsHTML(tourOpps(), 'OpportunityStore', 'Newest first'); },
+    enter: function (run) { return sendPacket('detector', 'oppstore', P.signal); } },
+  { title: 'Two threads, with the stores in between', cam: 'threads', focus: ['ratestore', 'oppstore'],
+    body: '<p>Look at the pools of light under the blocks. <b>Amber</b> blocks run on Spring\'s <b>scheduler thread</b>: fetching rates, building the graph and running Bellman-Ford. <b>Teal</b> blocks run on Swing\'s <b>Event Dispatch Thread (EDT)</b>. The <b>white</b> blocks are the two shared stores that both threads use.</p><p>This split follows Swing\'s golden rule: components may only be touched on the EDT, and slow work must never run there or the window freezes. So the scheduler never calls the UI directly. It drops results into the stores, and the UI picks them up on its own timer.</p>',
+    data: threadsHTML, dwell: 11000,
+    enter: function (run) {
+      function loop() {
+        if (run !== runId) return;
+        chain(['scheduler', 'ratestore', 'graphbuilder', 'detector', 'oppstore'], P.brass, run, 1.4);
+        sleep(reduceMotion ? 200 : 1500).then(function () { if (run === runId) chain(['oppstore', 'refresher', 'network'], P.accent, run, 1.4); });
+        sleep(reduceMotion ? 600 : 4200).then(loop);
+      }
+      loop();
+    } },
+  { title: 'The Swing window: red cycle, new table row', cam: 'ui', focus: ['network', 'table', 'mainframe'],
+    body: '<p>This is what the user actually sees. <span class="mono">NetworkPanel</span> overrides <span class="mono">paintComponent</span> and uses Graphics2D to draw the currency nodes and edges, painting the profitable cycle in red. <span class="mono">OpportunityTablePanel</span> is a JTable where each new opportunity appears at the top.</p><p><span class="mono">UiRefresher</span> is a <span class="mono">javax.swing.Timer</span>, which conveniently fires on the EDT. Once a second it reads both stores and calls <span class="mono">repaint()</span>. The frame uses a BorderLayout: toolbar in NORTH, graph in CENTER, tables in EAST.</p>',
+    enter: function (run) { return sendPacket('oppstore', 'monitor', P.accent); } },
+  { title: 'Live mode: the system runs on its own', cam: 'live', focus: [],
+    body: '<p>Now everything runs together. Every tick brings new prices, a freshly built graph and a full Bellman-Ford pass. When an arbitrage appears, the cycle lights up red on the dais, a red comet carries it to the store and the screen, and it lands at the top of the list. On many ticks nothing is found, exactly like a real market where these gaps are rare and short-lived.</p><p><b>Suggested build order:</b> project setup and model classes first, then the rate layer, then the detection engine (tested with JUnit before any UI exists), then the Swing UI, and finally wiring everything together.</p><p><button class="btn small" type="button" data-action="live" aria-pressed="true">Pause live mode</button></p>',
+    data: function () { return oppsHTML(live.opps, 'Live opportunities', 'Tick 0'); },
+    enter: function (run) { startLive(run); } }
+];
+function tourOpps() { return [{ path: TOUR.cycle, profit: TOUR.profit, time: tourTime }]; }
+var tourTime = timeStr();
+/* ---------- live mode ---------- */
+var live = { on: false, opps: [], price: [1, 1 / 0.9, 1.27, 0.012], ticks: 0, timer: null };
+function gauss() { var u = 1 - Math.random(), v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+function liveRates() {
+  for (var i = 1; i < 4; i++) live.price[i] *= 1 + gauss() * 0.0008;
+  var r = [];
+  for (i = 0; i < 4; i++) { r.push([]); for (var j = 0; j < 4; j++) r[i].push(i === j ? 1 : live.price[i] / live.price[j] * (1 - SPREAD) * (1 + gauss() * 0.0002)); }
+  if (Math.random() < 0.45) {
+    var ids = [0, 1, 2, 3].sort(function () { return Math.random() - 0.5; }), a = ids[0], b = ids[1], boost = 1.006 + Math.random() * 0.007;
+    r[a][b] *= boost; r[b][a] /= boost;
+  }
+  return r;
+}
+function liveTick(run) {
+  if (run !== runId || !live.on) return;
+  live.ticks++;
+  var rates = liveRates(), res = runBF(rates, FEE), cyc = res.cycle;
+  live.rates = rates;
+  var found = cyc ? { path: cyc, profit: cycleProfit(rates, cyc, FEE), time: timeStr() } : null;
+  chain(['provider', 'scheduler', 'ratestore', 'graphbuilder', 'detector'], P.brass, run, 2.2).then(function () {
+    if (run !== runId) return;
+    showCycle(cyc);
+    if (found && found.profit > 0) {
+      live.opps.unshift(found); live.opps = live.opps.slice(0, 12);
+      return chain(['detector', 'oppstore', 'monitor'], P.signal, run, 2.2);
+    }
+  }).then(function () {
+    if (run !== runId) return;
+    monState.live = true; monState.ticks = live.ticks; monState.cycle = cyc; monState.opps = live.opps; drawMonitor();
+    dataEl.hidden = false; dataEl.innerHTML = oppsHTML(live.opps, 'Live opportunities', 'Tick ' + live.ticks + ': ' + (found ? 'arbitrage found, ' + found.profit.toFixed(3) + '%' : 'no negative cycle this tick'));
+  });
+}
+function startLive(run) {
+  live.on = true; liveTick(run);
+  live.timer = setInterval(function () { liveTick(run); }, reduceMotion ? 2500 : 3600);
+}
+function stopLive() { live.on = false; if (live.timer) clearInterval(live.timer); live.timer = null; }
+
+/* ---------- step machine ---------- */
+var current = -1, runId = 0, tweens = [], autoTimer = null, autoplay = false;
+var titleEl = $('#title'), bodyEl = $('#body'), countEl = $('#count'), ticksEl = $('#ticks'), prevBtn = $('#prev'), nextBtn = $('#next'), autoBtn = $('#auto');
+STEPS.forEach(function (s, i) {
+  var b = document.createElement('button'); b.className = 'tick'; b.type = 'button'; b.setAttribute('role', 'tab');
+  b.setAttribute('aria-label', 'Step ' + (i + 1) + ': ' + s.title.replace(/<[^>]+>/g, ''));
+  b.title = (i + 1) + '. ' + s.title;
+  b.addEventListener('click', function () { go(i); }); ticksEl.appendChild(b);
+});
+var focusSet = {};
+function applyState(i) {
+  var graphOn = i >= 5 && i <= 16;
+  graph.visible = graphOn;
+  if (graphOn && i !== 5) setGrow(1);
+  setWeightLabels(i === 6, TOUR.rates);
+  COINS.forEach(function (c) { c.label.show = graphOn; });
+  setDistLabels(i >= 7 && i <= 10 ? (i === 7 || i === 8 ? bf.distAfter[0] : bf.distAfter[bf.n]) : null);
+  if (i >= 11 && i <= 15) showCycle(TOUR.cycle); else showCycle(null);
+  if (i === 9 && lastE) setEdge(lastE.k, 'cycle');
+  footprints.forEach(function (f) { f.visible = i === 14; });
+  monState.live = false; monState.ticks = 0;
+  if (i >= 15) { monState.cycle = TOUR.cycle; monState.opps = tourOpps(); }
+  else if (i >= 13) { monState.cycle = null; monState.opps = []; }
+  else { monState.cycle = null; monState.opps = []; }
+  drawMonitor();
+}
+function go(i) {
+  if (i < 0 || i >= STEPS.length) return;
+  preview = null; previewEl = null; hoverEdge = -1; moveTip(0, 0, null);
+  runId++; var run = runId;
+  clearPackets(); tweens.forEach(function (t) { t.done && t.done(); }); tweens = [];
+  stopLive(); live.opps = []; live.ticks = 0;
+  current = i; var s = STEPS[i];
+  focusSet = {}; s.focus.forEach(function (id) { focusSet[id] = 1; });
+  Object.keys(BLOCKS).forEach(function (id) { BLOCKS[id].label.el.classList.toggle('focus', !!focusSet[id]); });
+  titleEl.textContent = s.title; bodyEl.innerHTML = s.body;
+  [titleEl, bodyEl].forEach(function (el) { el.classList.remove('fade'); void el.offsetWidth; el.classList.add('fade'); });
+  countEl.textContent = 'Step ' + (i + 1) + ' of ' + STEPS.length;
+  Array.prototype.forEach.call(ticksEl.children, function (b, k) { b.classList.toggle('on', k === i); b.classList.toggle('done', k < i); b.setAttribute('aria-selected', k === i ? 'true' : 'false'); });
+  prevBtn.disabled = i === 0;
+  nextBtn.textContent = i === STEPS.length - 1 ? 'Start over' : 'Next';
+  applyState(i);
+  setData(s.data ? s.data() : null);
+  flyTo(CAM[s.cam]);
+  hidePop();
+  var pr = s.enter ? s.enter(run) : null;
+  scheduleAuto(s, pr);
+  try { history.replaceState(null, '', '#step-' + (i + 1)); } catch (e) {}
+}
+function scheduleAuto(s, pr) {
+  if (autoTimer) clearTimeout(autoTimer); autoTimer = null;
+  if (!autoplay || current >= STEPS.length - 1) return;
+  var at = current;
+  autoTimer = setTimeout(function () { if (autoplay && current === at) go(current + 1); }, s.dwell || 8000);
+}
+prevBtn.addEventListener('click', function () { go(current - 1); });
+nextBtn.addEventListener('click', function () { go(current === STEPS.length - 1 ? 0 : current + 1); });
+autoBtn.addEventListener('click', function () {
+  autoplay = !autoplay; autoBtn.setAttribute('aria-pressed', autoplay ? 'true' : 'false');
+  autoBtn.textContent = autoplay ? 'Autoplay on' : 'Autoplay';
+  scheduleAuto(STEPS[current]);
+});
+bodyEl.addEventListener('click', function (e) {
+  var b = e.target.closest('[data-action]'); if (!b) return;
+  if (b.dataset.action === 'replay') go(current);
+  if (b.dataset.action === 'live') {
+    if (live.on) { stopLive(); b.textContent = 'Resume live mode'; b.setAttribute('aria-pressed', 'false'); }
+    else { runId++; var run = runId; startLive(run); b.textContent = 'Pause live mode'; b.setAttribute('aria-pressed', 'true'); }
+  }
+});
+window.addEventListener('keydown', function (e) {
+  if (e.target.closest && e.target.closest('input,textarea')) return;
+  if (e.key === 'ArrowRight') { go(Math.min(current + 1, STEPS.length - 1)); e.preventDefault(); }
+  else if (e.key === 'ArrowLeft') { go(Math.max(current - 1, 0)); e.preventDefault(); }
+  else if (e.key === 'Escape') { hidePop(); moveTip(0, 0, null); }
+});
+
+/* ---------- connections between classes ---------- */
+var DEPS = {
+  main: ['scheduler', 'detector', 'mainframe'],
+  provider: ['scheduler'],
+  scheduler: ['provider', 'ratestore', 'service'],
+  ratestore: ['graphbuilder', 'refresher'],
+  service: ['graphbuilder', 'detector', 'profit', 'validator', 'oppstore'],
+  graphbuilder: ['detector'],
+  detector: ['oppstore'],
+  oppstore: ['refresher'],
+  mainframe: ['network', 'table'],
+  refresher: ['network', 'table']
+};
+function relatedOf(id) {
+  var s = {}; s[id] = 1;
+  (DEPS[id] || []).forEach(function (d) { s[d] = 1; });
+  Object.keys(DEPS).forEach(function (k) { if (DEPS[k].indexOf(id) >= 0) s[k] = 1; });
+  return s;
+}
+var depGroup = new THREE.Group(); scene.add(depGroup);
+var depMats = {}, activeRel = null, depShown = null, popId = null;
+function depMat(col) { if (!depMats[col]) depMats[col] = new THREE.LineDashedMaterial({ color: col, dashSize: 0.28, gapSize: 0.18, transparent: true, opacity: 0.9 }); return depMats[col]; }
+function showDeps(id) {
+  while (depGroup.children.length) { var c = depGroup.children.pop(); c.geometry.dispose(); }
+  activeRel = id ? relatedOf(id) : null;
+  Object.keys(BLOCKS).forEach(function (k) {
+    BLOCKS[k].label.el.classList.toggle('dim', !!activeRel && !activeRel[k]);
+    BLOCKS[k].label.el.classList.toggle('rel', !!activeRel && !!activeRel[k] && k !== id);
+  });
+  if (!id) return;
+  var a = anchorOf(id), outs = DEPS[id] || [];
+  Object.keys(activeRel).forEach(function (o) {
+    if (o === id) return;
+    var from = outs.indexOf(o) >= 0 ? a : anchorOf(o), to = from === a ? anchorOf(o) : a;
+    var d = from.distanceTo(to), ctrl = from.clone().add(to).multiplyScalar(0.5).add(new THREE.Vector3(0, 1.2 + d * 0.2, 0));
+    var g = new THREE.BufferGeometry().setFromPoints(new THREE.QuadraticBezierCurve3(from, ctrl, to).getPoints(48));
+    var l = new THREE.Line(g, depMat(BLOCKS[from === a ? id : o].color)); l.computeLineDistances(); depGroup.add(l);
+  });
+}
+function updateDeps() { var id = hoverId || popId; if (id !== depShown) { depShown = id; showDeps(id); } }
+function blockView(id) { var b = BLOCKS[id]; return { p: [b.x + 5.5, b.h + 6, b.z + 9.5], t: [b.x, b.h / 2 + 0.6, b.z] }; }
+
+/* ---------- info popover ---------- */
+var popEl = $('#pop');
+function showPop(id) {
+  var b = BLOCKS[id], rel = relatedOf(id);
+  popId = id; updateDeps();
+  popEl.style.setProperty('--lc', b.color);
+  popEl.innerHTML = '<button class="x" type="button" aria-label="Close">×</button><p class="name">' + b.name + '</p><p class="layer">' + b.layer + '</p><p>' + b.role + '</p><ul>' +
+    b.methods.map(function (m) { return '<li>' + m.replace(/</g, '&lt;') + '</li>'; }).join('') + '</ul>' +
+    '<p class="rel-h">Connected to</p><div class="rel-list">' +
+    Object.keys(rel).filter(function (k) { return k !== id; }).map(function (k) { return '<button type="button" class="chip" data-go="' + k + '" style="--c:' + BLOCKS[k].color + '">' + BLOCKS[k].name + '</button>'; }).join('') +
+    '</div><button type="button" class="btn small fly" data-fly="' + id + '">Fly to this class</button>';
+  popEl.hidden = false; popEl.classList.remove('fade'); void popEl.offsetWidth; popEl.classList.add('fade');
+  popEl.querySelector('.x').addEventListener('click', hidePop);
+  popEl.querySelector('.x').focus({ preventScroll: true });
+}
+function hidePop() { popEl.hidden = true; popId = null; updateDeps(); }
+popEl.addEventListener('click', function (e) {
+  var g = e.target.closest('[data-go]'), f = e.target.closest('[data-fly]');
+  if (g) { showPop(g.dataset.go); flyTo(blockView(g.dataset.go)); }
+  else if (f) flyTo(blockView(f.dataset.fly));
+});
+popEl.addEventListener('mouseover', function (e) { var g = e.target.closest('[data-go]'); if (g) BLOCKS[g.dataset.go].label.el.classList.add('hover'); });
+popEl.addEventListener('mouseout', function (e) { var g = e.target.closest('[data-go]'); if (g) BLOCKS[g.dataset.go].label.el.classList.remove('hover'); });
+
+/* ---------- graph tooltip ---------- */
+var tipEl = $('#tip'), hoverEdge = -1;
+var CUR_NAME = ['US dollar', 'Euro', 'British pound', 'Indian rupee'];
+function currentRates() { return live.on && live.rates ? live.rates : TOUR.rates; }
+function edgeTip(k) {
+  var e = EDGES[k], r = currentRates()[e.i][e.j], w = -Math.log(r * (1 - FEE));
+  return '<b>' + CUR[e.i] + ' → ' + CUR[e.j] + '</b><br>rate&nbsp;&nbsp; ' + fmtRate(r) + '<br>weight <span class="' + (w < 0 ? 'neg' : 'pos') + '">' + fmtD(w) + '</span>' +
+    (e.state === 'cycle' ? '<br><span class="neg">part of the arbitrage cycle</span>' : '');
+}
+function coinTip(i) {
+  var r = currentRates(), h = '<b>' + CUR[i] + '</b> · ' + CUR_NAME[i];
+  for (var j = 0; j < 4; j++) if (j !== i) h += '<br>1 ' + CUR[i] + ' → ' + fmtRate(r[i][j]) + ' ' + CUR[j];
+  return h;
+}
+function moveTip(x, y, html) {
+  if (!html) { tipEl.hidden = true; return; }
+  tipEl.innerHTML = html; tipEl.hidden = false;
+  var w = tipEl.offsetWidth, h = tipEl.offsetHeight;
+  tipEl.style.left = Math.min(x + 16, window.innerWidth - w - 8) + 'px';
+  tipEl.style.top = Math.min(y + 16, window.innerHeight - h - 8) + 'px';
+}
+function setHoverEdge(k) {
+  if (k === hoverEdge) return;
+  if (hoverEdge >= 0) setEdge(hoverEdge, EDGES[hoverEdge].state);
+  hoverEdge = k;
+  if (k >= 0) { var e = EDGES[k]; e.mat.emissive.set('#ffffff'); e.mat.emissiveIntensity = 0.45; e.cone.scale.set(1.7, 1.7, 1.7); }
+}
+
+/* ---------- pointer: orbit, zoom, pick ---------- */
+var canvas = renderer.domElement, pointers = {}, dragStart = null, moved = 0, pinch = null, hoverId = null;
+var ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+var graphPickables = [];
+COINS.forEach(function (c, i) { c.mesh.userData.coin = i; graphPickables.push(c.mesh); });
+EDGES.forEach(function (e, k) { e.tube.userData.edge = k; e.cone.userData.edge = k; graphPickables.push(e.tube, e.cone); });
+ray.params.Line = { threshold: 0.1 };
+function pickAny(x, y) {
+  ndc.set(x / window.innerWidth * 2 - 1, -(y / window.innerHeight) * 2 + 1); ray.setFromCamera(ndc, camera);
+  var hb = ray.intersectObjects(blockMeshes, false)[0];
+  var hg = graph.visible ? ray.intersectObjects(graphPickables, false)[0] : null;
+  if (hg && (!hb || hg.distance < hb.distance)) return hg.object.userData.coin !== undefined ? { coin: hg.object.userData.coin } : { edge: hg.object.userData.edge };
+  return hb ? { block: hb.object.userData.id } : {};
+}
+function pick(x, y) { return pickAny(x, y).block || null; }
+canvas.addEventListener('pointerdown', function (e) {
+  canvas.setPointerCapture(e.pointerId); pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+  var ids = Object.keys(pointers);
+  if (ids.length === 1) { dragStart = { x: e.clientX, y: e.clientY }; moved = 0; canvas.classList.add('dragging'); }
+  if (ids.length === 2) { var a = pointers[ids[0]], b = pointers[ids[1]]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), r: orbit.r }; }
+  moveTip(0, 0, null);
+});
+canvas.addEventListener('pointermove', function (e) {
+  var p = pointers[e.pointerId];
+  if (!p) {
+    var hit = pickAny(e.clientX, e.clientY), id = hit.block || null;
+    if (id !== hoverId) { if (hoverId) BLOCKS[hoverId].label.el.classList.remove('hover'); hoverId = id; if (id) BLOCKS[id].label.el.classList.add('hover'); updateDeps(); }
+    setHoverEdge(hit.edge !== undefined ? hit.edge : -1);
+    moveTip(e.clientX, e.clientY, hit.edge !== undefined ? edgeTip(hit.edge) : hit.coin !== undefined ? coinTip(hit.coin) : null);
+    canvas.classList.toggle('pointing', !!id || hit.edge !== undefined || hit.coin !== undefined);
+    return;
+  }
+  var dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
+  var ids = Object.keys(pointers);
+  if (ids.length === 2 && pinch) { var a = pointers[ids[0]], b = pointers[ids[1]], d = Math.hypot(a.x - b.x, a.y - b.y); orbit.r = Math.max(6, Math.min(90, pinch.r * pinch.d / Math.max(d, 1))); camTween = null; return; }
+  moved += Math.abs(dx) + Math.abs(dy);
+  if (moved > 4) { camTween = null; orbit.theta -= dx * 0.0055; orbit.phi = Math.max(0.18, Math.min(1.45, orbit.phi - dy * 0.0045)); }
+});
+canvas.addEventListener('pointerleave', function () {
+  if (Object.keys(pointers).length) return;
+  moveTip(0, 0, null); setHoverEdge(-1);
+  if (hoverId) { BLOCKS[hoverId].label.el.classList.remove('hover'); hoverId = null; updateDeps(); }
+});
+function endPointer(e) {
+  if (!pointers[e.pointerId]) return;
+  var wasSingle = Object.keys(pointers).length === 1;
+  delete pointers[e.pointerId]; pinch = null; canvas.classList.remove('dragging');
+  if (wasSingle && moved <= 4 && e.type === 'pointerup') {
+    var hit = pickAny(e.clientX, e.clientY);
+    if (hit.block) showPop(hit.block);
+    else if (hit.edge !== undefined) moveTip(e.clientX, e.clientY, edgeTip(hit.edge));
+    else if (hit.coin !== undefined) moveTip(e.clientX, e.clientY, coinTip(hit.coin));
+    else { hidePop(); moveTip(0, 0, null); }
+  }
+}
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', endPointer);
+canvas.addEventListener('dblclick', function (e) { var id = pick(e.clientX, e.clientY); if (id) { showPop(id); flyTo(blockView(id)); } });
+canvas.addEventListener('wheel', function (e) { e.preventDefault(); camTween = null; orbit.r = Math.max(6, Math.min(90, orbit.r * (1 + e.deltaY * 0.0011))); }, { passive: false });
+
+/* ---------- data panel ↔ 3D: hovering a row lights it up in the model ---------- */
+var preview = null, previewEl = null, GRAPH_C = new THREE.Vector3(0, GY, 0);
+function startPreview() {
+  if (preview) return;
+  preview = { vis: graph.visible, states: EDGES.map(function (e) { return e.state; }),
+    coins: COINS.map(function (c) { return [c.ring.visible, c.aura.visible, c.label.el.classList.contains('hot'), c.label.show, c.ringMat.color.getHex()]; }) };
+  if (!graph.visible) { graph.visible = true; setGrow(1); COINS.forEach(function (c) { c.label.show = true; }); }
+}
+function endPreview() {
+  if (!preview) return;
+  var pv = preview; preview = null;
+  graph.visible = pv.vis;
+  COINS.forEach(function (c, i) { var s = pv.coins[i]; c.ring.visible = s[0]; c.aura.visible = s[1]; c.label.el.classList.toggle('hot', s[2]); c.label.show = s[3]; c.ringMat.color.setHex(s[4]); });
+  if (live.on) showCycle(monState.cycle); else EDGES.forEach(function (e, k) { setEdge(k, pv.states[k]); });
+}
+function ringCoin(i, col) { COINS[i].ring.visible = true; COINS[i].ringMat.color.set(col); }
+dataEl.addEventListener('mouseover', function (e) {
+  var el = e.target.closest('[data-edge],[data-node],[data-cycle]');
+  if (el === previewEl) return;
+  endPreview(); previewEl = el; if (!el) return;
+  if (!graph.visible && camera.position.distanceTo(GRAPH_C) < 12) return;
+  startPreview();
+  if (el.dataset.edge) { var uv = el.dataset.edge.split('-').map(Number); resetEdges(); COINS.forEach(function (c) { c.ring.visible = false; c.aura.visible = false; }); setEdge(edgeIndex(uv[0], uv[1]), 'check'); ringCoin(uv[0], P.accent); ringCoin(uv[1], P.accent); }
+  else if (el.dataset.node) { COINS.forEach(function (c) { c.ring.visible = false; }); ringCoin(+el.dataset.node, P.accent); }
+  else if (el.dataset.cycle) showCycle(el.dataset.cycle.split(',').map(Number));
+});
+dataEl.addEventListener('mouseleave', function () { endPreview(); previewEl = null; });
+
+/* ---------- resize + theme ---------- */
+function onResize() { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); if (composer) { composer.setSize(window.innerWidth, window.innerHeight); bloom.setSize(window.innerWidth, window.innerHeight); } }
+window.addEventListener('resize', onResize);
+function retheme() {
+  P = readPalette(); setLights();
+  scene.background.set(P.bg); scene.fog.color.set(P.bg);
+  gridMat.color.set(P.grid); edgeMat.color.set(P.edge); 
+  coinMat.color.set(P.brass);
+  footMats.brass.color.set(P.brass); footMats.accent.color.set(P.accent); footMats.shared.color.set(P.ink2);
+  packetMats = {}; EDGES.forEach(function (e, k) { setEdge(k, e.state); }); COINS.forEach(function (c) { c.ringMat.color.set(P.signal); });
+  drawMonitor(); if (STEPS[current] && STEPS[current].data && !live.on) setData(STEPS[current].data());
+}
+var mq = window.matchMedia('(prefers-color-scheme: dark)');
+if (mq.addEventListener) mq.addEventListener('change', retheme); else if (mq.addListener) mq.addListener(retheme);
+new MutationObserver(retheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawMonitor);
+
+/* ---------- bloom (optional: falls back to a plain render) ---------- */
+var composer = null, bloom = null;
+try {
+  if (THREE.EffectComposer && THREE.UnrealBloomPass && THREE.RenderPass) {
+    composer = new THREE.EffectComposer(renderer);
+    composer.addPass(new THREE.RenderPass(scene, camera));
+    bloom = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.32, 0.4, 0.9);
+    composer.addPass(bloom);
+  }
+} catch (err) { composer = null; }
+
+/* ---------- loop ---------- */
+var tmpV = new THREE.Vector3(), focusCol = new THREE.Color(), baseCol = new THREE.Color(), narrow = false;
+function frame(now) {
+  requestAnimationFrame(frame);
+  if (camTween) {
+    var t = Math.min(1, (now - camTween.t0) / camTween.dur), k = ease(t), f = camTween.from, to = camTween.to;
+    orbit.target.lerpVectors(f.target, to.target, k); orbit.r = f.r + (to.r - f.r) * k;
+    orbit.theta = f.theta + camTween.dTheta * k; orbit.phi = f.phi + (to.phi - f.phi) * k;
+    if (t >= 1) camTween = null;
+  }
+  applyOrbit();
+  for (var i = tweens.length - 1; i >= 0; i--) { var tw = tweens[i], p = Math.min(1, (now - tw.t0) / tw.dur); tw.fn(ease(p)); if (p >= 1) { tweens.splice(i, 1); tw.done && tw.done(); } }
+  for (i = PACKETS.length - 1; i >= 0; i--) {
+    var pk = PACKETS[i], q = Math.min(1, (now - pk.t0) / pk.dur);
+    pk.curve.getPoint(ease(q), pk.mesh.position);
+    var ta = pk.trail.geometry.attributes.position, tarr = ta.array;
+    tarr.copyWithin(3, 0, tarr.length - 3); tarr[0] = pk.mesh.position.x; tarr[1] = pk.mesh.position.y; tarr[2] = pk.mesh.position.z; ta.needsUpdate = true;
+    if (q >= 1) { dropPacket(pk); PACKETS.splice(i, 1); pk.done(); }
+  }
+  for (i = 0; i < blockMeshes.length; i++) {
+    var m = blockMeshes[i], id = m.userData.id, on = focusSet[id] || hoverId === id || popId === id, dimmed = activeRel && !activeRel[id];
+    m.material.color.lerp(dimmed ? m.userData.dim : on || (activeRel && activeRel[id]) ? m.userData.hot : m.userData.base, 0.1);
+    m.material.emissiveIntensity += ((dimmed ? 0.03 : focusSet[id] ? 0.5 + Math.sin(now / 320) * 0.12 : on ? 0.45 : activeRel ? 0.3 : 0.14) - m.material.emissiveIntensity) * 0.1;
+  }
+  if (!reduceMotion) { dust.rotation.y = now * 0.000012; dust.position.y = Math.sin(now / 4000) * 0.4; scanRing.rotation.z = now / 2400; beam.material.opacity = 0.018 + Math.sin(now / 700) * 0.006; }
+  for (i = 0; i < EDGES.length; i++) { var eg = EDGES[i]; if (eg.spark.visible) eg.curve.getPoint(((now / (eg.state === 'cycle' ? 900 : 650)) + i * 0.13) % 1, eg.spark.position); }
+  var pulse = 1 + Math.sin(now / 260) * 0.06;
+  COINS.forEach(function (c, ci) {
+    if (c.ring.visible) c.ring.scale.set(pulse, pulse, pulse);
+    if (c.aura.visible) c.aura.material.opacity = 0.22 + Math.sin(now / 260) * 0.1;
+    if (!reduceMotion && graph.visible) { c.mesh.rotation.y = now / 1400 + ci; c.mesh.position.y = COIN_POS[ci].y + Math.sin(now / 900 + ci * 1.7) * 0.07; }
+  });
+  if (composer) composer.render(); else renderer.render(scene, camera);
+  narrow = window.innerWidth < 820;
+  var W = window.innerWidth, H = window.innerHeight;
+  for (i = 0; i < LABELS.length; i++) {
+    var L = LABELS[i], vis = L.show;
+    if (vis && L.el.classList.contains('coin') && !graph.visible) vis = false;
+    if (vis && narrow && !L.el.classList.contains('layer') && !L.el.classList.contains('coin') && !L.el.classList.contains('w') && !L.el.classList.contains('focus')) vis = false;
+    if (vis) { tmpV.copy(L.getPos()).project(camera); if (tmpV.z > 1 || tmpV.x < -1.2 || tmpV.x > 1.2 || tmpV.y < -1.2 || tmpV.y > 1.2) vis = false; }
+    if (!vis) { if (L.shown) { L.el.style.display = 'none'; L.shown = false; } continue; }
+    if (!L.shown) { L.el.style.display = ''; L.shown = true; }
+    var x = (tmpV.x + 1) / 2 * W, y = (1 - tmpV.y) / 2 * H;
+    L.el.style.transform = L.el.classList.contains('layer') ? 'translate3d(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px,0)' : 'translate3d(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px,0) translate(-50%,-100%)';
+  }
+}
+
+/* ---------- start ---------- */
+var startAt = 0, m = /#step-(\d+)/.exec(location.hash);
+if (m) startAt = Math.max(0, Math.min(STEPS.length - 1, parseInt(m[1], 10) - 1));
+var o0 = presetToOrbit({ p: [0, 46, 60], t: [0, 1.5, -1] }); orbit.target.copy(o0.target); orbit.r = o0.r; orbit.theta = o0.theta; orbit.phi = o0.phi;
+drawMonitor();
+go(startAt);
+requestAnimationFrame(frame);
+window.__tour = { go: go, steps: STEPS.length, tour: TOUR };
+})();
+</script>
+</body>
+</html>
