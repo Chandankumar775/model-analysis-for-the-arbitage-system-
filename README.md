@@ -198,7 +198,7 @@ Just want to try it? Use the live version at **[model-analysis-for-the-arbitage-
 There is no build step and nothing to install. It is one HTML file.
 
 ```bash
-git clone https://github.com/Chandankumar775/arbitrage-detector-3d.git
+git clone https://github.com/chandan-kumar-git/arbitrage-detector-3d.git
 cd arbitrage-detector-3d
 ```
 
@@ -241,5 +241,5 @@ The official deployment runs on Vercel at **https://model-analysis-for-the-arbit
 
 <div align="center">
 <br>
-Built by <a href="https://github.com/Chandankumar775">Chandan Kumar</a>
+Built by <a href="https://github.com/chandan-kumar-git">Chandan Kumar</a>
 </div>
