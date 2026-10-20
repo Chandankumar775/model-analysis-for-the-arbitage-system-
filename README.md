@@ -1,6 +1,6 @@
 <div align="center">
 
-# Bellman-Ford Arbitrage System
+<img src="docs/brand/wordmark.webp" alt="Bellman-Ford Arbitrage System" width="100%">
 
 ### An interactive 3D model of a forex arbitrage detector
 
@@ -198,8 +198,8 @@ Just want to try it? Use the live version at **[model-analysis-for-the-arbitage-
 There is no build step and nothing to install. It is one HTML file.
 
 ```bash
-git clone https://github.com/Chandankumar775/model-analysis-for-the-arbitage-system-.git
-cd model-analysis-for-the-arbitage-system-
+git clone https://github.com/Chandankumar775/arbitrage-detector-3d.git
+cd arbitrage-detector-3d
 ```
 
 Then either open `index.html` directly in Chrome, Edge or Firefox, or serve the folder:
